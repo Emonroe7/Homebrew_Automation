@@ -10,17 +10,35 @@
 ======= Pins Required:
 = SD Card uses SPI: pins 50(MISO), 51(MOSI), 52(SCK), 53(SS)
 = I2C for screens and clock uses pins 20(SDA) and 21(SCL)
-= Rotary Encoder uses INT4(19)A INT5(18)B
+= Rotary Encoder uses INT4(pin 19)A INT5(pin 18)B
 = Pins 22-33 are used for relays for pumps and valves.
 = Pin 34 is the alarm.
+= 
+= 
+= TO DO (no particular order):
+= 	-Add buttons for control
+= 	-Add calibration for pressure sensors
+=	-Add file IO
+=	-Add recipe parsing
+=	-Add time tracking
+=	-Add oneWire sensor data (addresses and locations)
+=	-Add sensor read functionality
+=	-Add auto mode following
+= 	-Add settings support
+=	-Add actuation of relays
+=	-Add manual mode
+=	-Replace man mode in menu with demo mode.
+=	-AHHHHHHHHHHH
 */
 
 //================ Libraries ================
+#include <EEPROM.h>
+#include <Wire.h>
 #include <LiquidTWI.h>
 #include <OneWire.h>
-#include <Wire.h>
 #include <SdFat.h>
 #include <Button.h>
+#include <RTClib.h>
 
 
 #define SERIAL_OUTPUT_DEBUG 1
@@ -62,16 +80,16 @@ const prog_char PROGMEM PREV[] = " PREV";
 const prog_char PROGMEM PREV_SEL[] = ">PREV";
 const prog_char PROGMEM CONFIRM[] = " CONFIRM";
 const prog_char PROGMEM CONFIRM_SEL[] = ">CONFIRM";
-const prog_char PROGMEM YN_NO[]=" YES >NO<";          
 const prog_char PROGMEM YN_YES[]=">YES< NO ";          
-const char *yn_items[]= {yn_00,yn_01};			//Used to easily go between Yes and No dialog selections
-
+const prog_char PROGMEM YN_NO[]=" YES >NO<";          
+const char *yn_items[]= {YN_YES,YN_NO};			//Used to easily go between Yes and No dialog selections
+const char LED_address[] = {0x71, 0x72, 0x73};	//I2C addresses of LED Displays
 
 //Relay Schedule: 0 = OFF, 1 = ON, 2 = DON'T CARE (INTERPRET AS 0 FOR NOW)
 //Could possibly use a bit field structure.
 const prog_uint8_t PROGMEM HLT_FILL[] = 	{1,0,1,0,1,0,0,0,0,0,0,0};
 const prog_uint8_t PROGMEM HLT_RECIRC[] = 	{1,0,0,1,1,0,0,0,0,0,0,0};
-const prog_uint8_t PROGMEM STRIKE_TRANS[] =	{1,0,0,1,0,1,0,0,0,0,0,0};
+const prog_uint8_t PROGMEM STRIKE_TRANS[] = {1,0,0,1,0,1,0,0,0,0,0,0};
 const prog_uint8_t PROGMEM MASH[] = 		{1,1,0,1,1,0,1,0,1,0,0,0};
 const prog_uint8_t PROGMEM SPARGE_IN_ON =	{1,1,0,1,0,1,1,0,0,1,0,0};
 const prog_uint8_t PROGMEM SPARGE_IN_OFF =	{0,1,0,0,0,0,1,0,0,1,0,0};
@@ -82,27 +100,33 @@ const prog_uint8_t PROGMEM COOL =			{1,1,0,1,1,0,0,1,1,0,0,1};
 const prog_uint8_t PROGMEM FILL_FERM =  	{0,1,0,0,0,0,0,1,0,0,1,0};
 const prog_uint8_t PROGMEM DRAIN_HLT =  	{1,1,0,1,0,1,0,1,0,0,1,1};
 const prog_uint8_t PROGMEM ERROR =			{0,0,0,0,0,0,0,0,0,0,0,0};	//Hopefully not needed
-//Create pointer array of all of these
+const uint8_t chipSelect = 53;	// SD chip select pin
 
+//Object creation
 SdFat sd;
-OneWire  ds(10);  	//OneWire devices connected to pin #10
+SdFile file;
+FatReader root;
+ArduinoOutStream cout(Serial);	//reate a serial stream
+RTC_DS1307 RTC;
+OneWire  ds(10);  	//OneWire devices connected to pin #10 (to change pin, change number)
 LiguidTWI lcd(0);	//Create LCD screen object
-const char LED_address[] = {0x71, 0x72, 0x73};	//I2C addresses of LED Displays
 int pulses, A_SIG=0, B_SIG=0;	//Rotary Encoder Variables
 
+
 //Process Enumeration. Using because it increases readability of code
-enum STEP {ST_MENU, = 0, ST_READY, ST_FILL, ST_STRIKE, ST_MASH_IN, ST_STEP_MASH_IN, ST_MASH, ST_SPARGE, 
-		   ST_BOIL, ST_COOL, ST_FILLFERM, ST_DONE, ST_DRAIN, ST_DRAIN_MLT, ST_DRAIN_HLT, ST_ERROR};
+enum STEP {ST_MENU, ST_READY, ST_FILL, ST_STRIKE, ST_MASH_IN, ST_STEP_MASH_IN, ST_MASH, ST_SPARGE, 
+		   ST_BOIL, ST_COOL, ST_FILLFERM, ST_DONE, ST_DRAIN, ST_DRAIN_MLT, ST_DRAIN_HLT, ST_CIP, ST_ERROR};
 enum MODE {AUTO = 1, MANUAL, SETTINGS};
 bool SD_Present = false;
 bool SD_ERROR = false;			//Possibly use
+int pulses, A_SIG=0, B_SIG=0;	//Rotary Encoder Variables
 
 
-//System Params
+//System Params (need to store in EEPROM later for settings menu)
 float mash_out_temp = 168.0;	//Mashout temp in Farenheight
 float vessel_ht = 17.0;			//Height of vessel in inches
 float vessel_diam = 16.0;		//Diameter of vessel in inches
-
+//Store default step times and temps for manual mode 
 
 
 //Recipe Variables
@@ -140,18 +164,17 @@ struct recipe{
 	float cooling_temp;
 } myRecipe;
 
-
 //================= Function Prototypes =================
-void Init_LEDS();
+void Init_Disp();
 void Splash_screen();
 void Main_Menu(); 
-void Auto_Brew();
+int Auto_Brew();
 void Settings_Menu();
 int Parse_Recipe_List();
 void Parse_Recipe();
-void Actuate_Relays();
+void Actuate_Relays(/*pass pointer to uint8_t array*/);
 void Update_LED();
-void Read_Sensors();
+void Read_Sensors(byte sensors);
 void CalcVolume();		//By each tank, or all at once?
 float CalcTempF(float, int);
 void A_RISE();
@@ -160,17 +183,42 @@ void B_RISE();
 void B_FALL();
 
 
-
+//************* MAIN PROGRAM ************
 void setup()
 {
-    lcd.begin(20, 4);		// Define LCD size
-    lcd.setBacklight(HIGH);	// Turn on the LCD backlight
-	Init_LEDS();
+	Serial.begin(9600);
+	//Init_Disp();
+	lcd.begin(20, 4);		// Define LCD size
+	lcd.setBacklight(HIGH);	// Turn on the LCD backlight
 	
-	Splash_screen();
+	Wire.begin();
+	RTC.begin();	
+	if (! RTC.isrunning()) {
+		Serial.println("RTC is NOT running!");
+		// following line sets the RTC to the date & time this sketch was compiled
+		RTC.adjust(DateTime(__DATE__, __TIME__)); //Need RTC for timekeeping
+	}
+    // Initialize each LED Display
+    for (int i = 0; i < 3; i++){
+        Wire.beginTransmission(LED_address[i]);  // Select which display to begin communication with
+        Wire.write(0x7A); // Brightness control command
+        Wire.write(100);  // Set brightness level: 0% to 100%
+        Wire.write('v');  // Clear Display, setting cursor to digit 0
+        Wire.endTransmission();  // End communication with this selected module.
+    }
 	
-	pinMode(53, OUTPUT);	// Chip Select on MEGA for  SD card. Must be an output.
 	
+	//Splash_screen();
+	//Disp name of project, and other info.
+	lcd.clear();
+	lcd.setCursor(1,0);//x,y
+	lcd.print(SPLASH1);
+	lcd.setCursor(6,1);
+	lcd.print(SPLASH2);
+	lcd.setCursor(0,3)
+	lcd.print(SPLASH3);
+	
+
 	//Setup pins for pumps, solenoid valves, and alarm.
 	pinMode(22, OUTPUT);
 	pinMode(23, OUTPUT);
@@ -182,29 +230,62 @@ void setup()
 	pinMode(29, OUTPUT);
 	pinMode(30, OUTPUT);
 	pinMode(31, OUTPUT);
-	pinMode(32, OUTPUT);
-	pinMode(33, OUTPUT);
-	pinMode(34, OUTPUT);
-
-	if (!SD.begin(53))
-	{	SD_Present = false;	}
-	else
-	{	SD_Present = true;	}
+	pinMode(32, OUTPUT);	//
+	pinMode(33, OUTPUT);	//
+	pinMode(34, OUTPUT);	//Alarm on 
+	pinMode(53, OUTPUT);	// Chip Select on MEGA for  SD card. Must be an output.
+	
+	if (!sd.begin(chipSelect, SPI_HALF_SPEED)) 
+		sd.initErrorHalt(); //Later, throw dialog error and ask for SD insert on LCD
 
 }
 void loop()
 {
 	//MENU SELECTIONS
-	MODE = Main_Menu();
-	//Parse menu selection
+	//MODE = Main_Menu();
+	bool selection_made = false;
+	int cursor_loc = 1;
 	
+	//Display Menu
+	lcd.setCursor(0,0);
+	lcd.print(CHOOSE_MODE);
+	lcd.setCursor(1,1);
+	lcd.print(AUTO_BREW_MODE);
+	lcd.setCursor(1,2);
+	lcd.print(MANUAL_BREW_MODE);
+	lcd.setCursor(1,3);
+	lcd.print(SETTINGS_MODE);	
+	
+	lcd.setCursor(0,1);
+	lcd.print(">");
+	
+	while (!selection_made)
+	{
+		/*
+			Control Cursor movement between the 3 options in response to up/down buttons.
+			Possibly blink "cursor" on each loop (alternate b/w printing ">" and printing " ")
+			Check for confirm button press (and subsequent release if down)
+		*/
+	}
+	//Parse menu selection
+	if (MODE == AUTO){
+		
+	} else if (MODE == MANUAL){
+		
+	} else if (MODE == SETTINGS){
+		
+	}
 }
 
 
 
-//***************** INITIALIZE ****************
-void Init_LEDS(){	// Initialize the LED Displays
+/*//************** INITIALIZE TWI ****************
+void Init_LEDS(){		// Initialize all TWI devices (LCD, RTC, and LEDs)
+	lcd.begin(20, 4);		// Define LCD size
+	lcd.setBacklight(HIGH);	// Turn on the LCD backlight
+	
 	Wire.begin();  
+	RTC.begin();
     // Initialize each LED Display
     for (int i = 0; i < 3; i++){
         Wire.beginTransmission(LED_address[i]);  // Select which display to begin communication with
@@ -225,7 +306,7 @@ void splash_screen(){
 	lcd.setCursor(0,3)
 	lcd.print(SPLASH3);
 }
-
+*/
 
 //********** MENUS AND CONTROL LOOPS **********
 void Main_Menu(){
@@ -259,26 +340,34 @@ void Main_Menu(){
 void Auto_Brew(){
 	switch(STEP)
 	{
+		case ST_MENU:
+			/*
+			Scan SD card and find all files
+			load file menu stuff (another function?)
+			*/
+		break;
+		
 		case ST_READY:
-		//Scan SD card, load file menu stuff (another function?)
-		//Select and load recipe	
-		//Display all ingredients
+			/*
+			Select and parse all recipe vars into data structure
+			Display all ingredients.
+			*/
 		break;
 		
 		case ST_FILL:
-		//Fill HLT till at beginning
+		//Fill HLT till at till at level in file
 		break;
 		
 		case ST_STRIKE;
-		//Heat up HLT, transfer, recirc., add water additives
+		//Heat up HLT, add water additives
 		break;
 		
 		case ST_MASH_IN;
-		//
+		//Transfer, recirc., 
 		break;
 		
 		case ST_STEP_MASH_IN;
-		//
+		//Transfer in interval if mash in temp above a certain amount, recirc., 
 		break;
 		
 		case ST_MASH:
@@ -286,25 +375,29 @@ void Auto_Brew(){
 		break;
 		
 		case ST_SPARGE: 
-		//
+			//Pump out slowly, pump in as needed switching between 2 relay profiles
+			//Stop pumping when BK level reaches calculated volume with pre-boil gravity
 		break; 
 		
 		case ST_BOIL:
-		//
+			//Boil and sound alarm and update LCD following schedule
 		break;
 		
 		case ST_STEEP:
-		//
+			//Display names of add on LCD
+			//Wait, but allow user to continue at press of confirm button
 		break;
 		
 		case ST_COOL:
-		//
+			//Cool till at cool temp
 		break;
 		
 		case ST_FERMFILL:
+			//Don't drain until confirm (possibly flush first from HLT)
 		break;
 		
 		case ST_DRAIN:
+			//Wait till confirm to drain
 		break;
 		
 		default:
@@ -319,7 +412,7 @@ void Settings_Menu(){
 		Find out what kind of settings Jim will want
 		These then need to be stored in EEPROM memory to stick around after power down.
 		
-		Time, Date, Actuation time
+		Time, Date, Actuation time, Defaults for manual mode, Time, Date.
 	*/
 }
 
@@ -333,6 +426,8 @@ int Parse_Recipe_List(){
 		Close file and continue searching SD card contents.
 		Possibly write file names and recipe names to files to store, then read from this file for recipe list;
 		***DON'T FORGET TO SYNC***
+		
+		see OpenNext example
 	*/
 	return num_recipes;
 }
@@ -371,8 +466,11 @@ void Update_LED(){ //possibly use Pointers to direct LED display vars to the cor
 	*/
 }
 
-void Read_Sensors(){
-	
+void Read_Sensors(byte sensors){
+	/*
+		Take in 6 (later 7) bools to know which sensors to check.
+		Do ananlog reads on pressure sensors and read temps with oneWire
+	*/
 }
 
 void CalcVolume(/* int tankNum */){
@@ -384,7 +482,7 @@ void CalcVolume(/* int tankNum */){
 	*/
 }	
 
-float CalcTempF(float degC, int pot_num){
+float CalcTempF(float degC, ){
 	float degF = 0;
 	degF = degC*1.8 + 32.0;
 	return degF;

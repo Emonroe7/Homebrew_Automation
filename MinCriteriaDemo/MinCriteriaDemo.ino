@@ -91,25 +91,25 @@ const prog_uint8_t PROGMEM HLT_FILL[] = 	{1,0,1,0,1,0,0,0,0,0,0,0};
 const prog_uint8_t PROGMEM HLT_RECIRC[] = 	{1,0,0,1,1,0,0,0,0,0,0,0};
 const prog_uint8_t PROGMEM STRIKE_TRANS[] = {1,0,0,1,0,1,0,0,0,0,0,0};
 const prog_uint8_t PROGMEM MASH[] = 		{1,1,0,1,1,0,1,0,1,0,0,0};
-const prog_uint8_t PROGMEM SPARGE_IN_ON =	{1,1,0,1,0,1,1,0,0,1,0,0};
-const prog_uint8_t PROGMEM SPARGE_IN_OFF =	{0,1,0,0,0,0,1,0,0,1,0,0};
-const prog_uint8_t PROGMEM REFILL_HLT = 	{1,2,1,0,1,0,2,2,2,2,2,2};	//For Refilling during boil at the moment
-const prog_uint8_t PROGMEM DRAIN_MLT =		{2,1,2,2,2,2,1,0,0,0,1,0};
-const prog_uint8_t PROGMEM BOIL = 			{0,0,0,0,0,0,0,0,0,0,0,0};
-const prog_uint8_t PROGMEM COOL =			{1,1,0,1,1,0,0,1,1,0,0,1};
-const prog_uint8_t PROGMEM FILL_FERM =  	{0,1,0,0,0,0,0,1,0,0,1,0};
-const prog_uint8_t PROGMEM DRAIN_HLT =  	{1,1,0,1,0,1,0,1,0,0,1,1};
-const prog_uint8_t PROGMEM ERROR =			{0,0,0,0,0,0,0,0,0,0,0,0};	//Hopefully not needed
+const prog_uint8_t PROGMEM SPARGE_IN_ON[] = {1,1,0,1,0,1,1,0,0,1,0,0};
+const prog_uint8_t PROGMEM SPARGE_IN_OFF[]= {0,1,0,0,0,0,1,0,0,1,0,0};
+const prog_uint8_t PROGMEM REFILL_HLT[] = 	{1,2,1,0,1,0,2,2,2,2,2,2};	//For Refilling during boil at the moment
+const prog_uint8_t PROGMEM DRAIN_MLT[] =	{2,1,2,2,2,2,1,0,0,0,1,0};
+const prog_uint8_t PROGMEM BOIL[] = 		{0,0,0,0,0,0,0,0,0,0,0,0};
+const prog_uint8_t PROGMEM COOL[] = 		{1,1,0,1,1,0,0,1,1,0,0,1};
+const prog_uint8_t PROGMEM FILL_FERM[] =  	{0,1,0,0,0,0,0,1,0,0,1,0};
+const prog_uint8_t PROGMEM DRAIN_HLT[] =  	{1,1,0,1,0,1,0,1,0,0,1,1};
+const prog_uint8_t PROGMEM ERROR[] =		{0,0,0,0,0,0,0,0,0,0,0,0};	//Hopefully not needed
 const uint8_t chipSelect = 53;	// SD chip select pin
 
 //Object creation
 SdFat sd;
 SdFile file;
 FatReader root;
-ArduinoOutStream cout(Serial);	//reate a serial stream
+ArduinoOutStream cout(Serial);	//Create a serial output stream for SDFat
 RTC_DS1307 RTC;
-OneWire  ds(10);  	//OneWire devices connected to pin #10 (to change pin, change number)
-LiguidTWI lcd(0);	//Create LCD screen object
+OneWire  ds(10);  				//OneWire devices connected to pin #10 (to change pin, change number)
+LiguidTWI lcd(0);				//Create LCD screen object
 int pulses, A_SIG=0, B_SIG=0;	//Rotary Encoder Variables
 
 
@@ -348,7 +348,7 @@ void Auto_Brew(){
 			lcd.print(LOAD_RECIPES);
 			if(!Parse_Recipe_List())
 			{
-				
+				//Scan
 			}
 				
 			/*
@@ -453,13 +453,32 @@ void Parse_Recipe(){
 
 
 //****** SENSOR, ACTUATOR, ETC UPDATES ********
-void Actuate_Relays(char* &ptr_schedule){
+void Actuate_Relays(uint_8* &ptr_schedule){
 	/*
 		Shut off pumps first
 		Load the relay schedule profile into local var (maybe)
 		Go through 3-12 and turn on or off each in relation to schedule.
 		Actuate pump relays last.
 	*/
+	
+	//Turn off pumps
+	digitalWrite(22, LOW);
+	digitalWrite(23, LOW);
+	
+	//Actuate valves for indicated step
+	digitalWrite(24, ptr_schedule[2]);
+	digitalWrite(25, ptr_schedule[3]);
+	digitalWrite(26, ptr_schedule[4]);
+	digitalWrite(27, ptr_schedule[5]);
+	digitalWrite(28, ptr_schedule[6]);
+	digitalWrite(29, ptr_schedule[7]);
+	digitalWrite(30, ptr_schedule[8]);
+	digitalWrite(31, ptr_schedule[9]);
+	digitalWrite(32, ptr_schedule[10]);
+	digitalWrite(33, ptr_schedule[11]);
+	
+	delay(actTime);
+	
 	
 }
 

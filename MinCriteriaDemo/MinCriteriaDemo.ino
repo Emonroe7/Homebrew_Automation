@@ -12,8 +12,8 @@
 = I2C for screens and clock uses pins 20(SDA) and 21(SCL)
 = Rotary Encoder uses INT4(pin 19)A INT5(pin 18)B
 = Pins 22-33 are used for relays for pumps and valves.
-= Pin 34 is the alarm.
-= 
+= Pin 34 is alarm.
+= Analog 
 = 
 = TO DO (no particular order):
 = 	-Add buttons for control
@@ -63,7 +63,7 @@ const float cubicInchToQt = 0.017316;
 const prog_char PROGMEM SPLASH1[] = "Assistive Brewing";
 const prog_char PROGMEM SPLASH2[] = "Device";
 const prog_char PROGMEM SPLASH3[] = "...Preparing to brew";
-const prog_char PROGMEM RECIPES[] = "Recipes";
+const prog_char PROGMEM LOAD_RECIPES[] = "Loading Recipes";
 const prog_char PROGMEM CHOOSE_MODE[] = "Pick a mode:"
 const prog_char PROGMEM AUTO_BREW_MODE[] = "Auto Brewing";
 const prog_char PROGMEM MANUAL_BREW_MODE[] = "Manual Brewing";
@@ -130,7 +130,6 @@ float vessel_diam = 16.0;		//Diameter of vessel in inches
 
 
 //Recipe Variables
-//Make a data structure here
 struct recipe{
 	String name;
 	float srm;
@@ -170,13 +169,13 @@ void Splash_screen();
 void Main_Menu(); 
 int Auto_Brew();
 void Settings_Menu();
-int Parse_Recipe_List();
+bool Parse_Recipe_List();
 void Parse_Recipe();
-void Actuate_Relays(/*pass pointer to uint8_t array*/);
+void Actuate_Relays(char*&);
 void Update_LED();
 void Read_Sensors(byte sensors);
-void CalcVolume();		//By each tank, or all at once?
-float CalcTempF(float, int);
+void CalcVolume(int, float);		//By each tank, or all at once?
+float CalcTempF(float);
 void A_RISE();
 void A_FALL();
 void B_RISE();
@@ -220,19 +219,19 @@ void setup()
 	
 
 	//Setup pins for pumps, solenoid valves, and alarm.
-	pinMode(22, OUTPUT);
-	pinMode(23, OUTPUT);
-	pinMode(24, OUTPUT);
-	pinMode(25, OUTPUT);
-	pinMode(26, OUTPUT);
-	pinMode(27, OUTPUT);
-	pinMode(28, OUTPUT);
-	pinMode(29, OUTPUT);
-	pinMode(30, OUTPUT);
-	pinMode(31, OUTPUT);
-	pinMode(32, OUTPUT);	//
-	pinMode(33, OUTPUT);	//
-	pinMode(34, OUTPUT);	//Alarm on 
+	pinMode(22, OUTPUT);	//PA0 -Water pump
+	pinMode(23, OUTPUT);	//PA1 -Wort pump
+	pinMode(24, OUTPUT);	//PA2
+	pinMode(25, OUTPUT);	//PA3
+	pinMode(26, OUTPUT);	//PA4
+	pinMode(27, OUTPUT);	//PA5
+	pinMode(28, OUTPUT);	//PA6
+	pinMode(29, OUTPUT);	//PA7
+	pinMode(30, OUTPUT);	//PC7
+	pinMode(31, OUTPUT);	//PC6
+	pinMode(32, OUTPUT);	//PC5
+	pinMode(33, OUTPUT);	//PC4
+	pinMode(34, OUTPUT);	//PC3 -Alarm
 	pinMode(53, OUTPUT);	// Chip Select on MEGA for  SD card. Must be an output.
 	
 	if (!sd.begin(chipSelect, SPI_HALF_SPEED)) 
@@ -243,8 +242,11 @@ void loop()
 {
 	//MENU SELECTIONS
 	//MODE = Main_Menu();
-	bool selection_made = false;
-	int cursor_loc = 1;
+	bool selectionMade = false;
+	bool cursorState = true;
+	byte blinkCount = 0;
+	byte cursorLoc = 1;
+	
 	
 	//Display Menu
 	lcd.setCursor(0,0);
@@ -341,6 +343,14 @@ void Auto_Brew(){
 	switch(STEP)
 	{
 		case ST_MENU:
+			lcd.clear();
+			lcd.setCursor(2,1);
+			lcd.print(LOAD_RECIPES);
+			if(!Parse_Recipe_List())
+			{
+				
+			}
+				
 			/*
 			Scan SD card and find all files
 			load file menu stuff (another function?)
@@ -412,7 +422,7 @@ void Settings_Menu(){
 		Find out what kind of settings Jim will want
 		These then need to be stored in EEPROM memory to stick around after power down.
 		
-		Time, Date, Actuation time, Defaults for manual mode, Time, Date.
+		Time, Date, Actuation time, Defaults for manual mode.
 	*/
 }
 
@@ -443,7 +453,7 @@ void Parse_Recipe(){
 
 
 //****** SENSOR, ACTUATOR, ETC UPDATES ********
-void Actuate_Relays(/*take in a pointer value of array of relay schedule*/){
+void Actuate_Relays(char* &ptr_schedule){
 	/*
 		Shut off pumps first
 		Load the relay schedule profile into local var (maybe)
@@ -466,23 +476,24 @@ void Update_LED(){ //possibly use Pointers to direct LED display vars to the cor
 	*/
 }
 
-void Read_Sensors(byte sensors){
+void Read_Sensors(){
 	/*
 		Take in 6 (later 7) bools to know which sensors to check.
+		Save processing time
 		Do ananlog reads on pressure sensors and read temps with oneWire
 	*/
 }
 
-void CalcVolume(/* int tankNum */){
+void CalcVolume(int tankNum, float specificGrav){
 	/*
-		Use lookup table (or something) for HLT(b/c coil)
+		Use lookup table (or map) for HLT(b/c coil)
 		Take into account preboil specific gravity for boil kettle filling.
 		
 		First convert sensor readings to height in water (sg = 1.000).
 	*/
 }	
 
-float CalcTempF(float degC, ){
+float CalcTempF(float degC){
 	float degF = 0;
 	degF = degC*1.8 + 32.0;
 	return degF;

@@ -1,0 +1,50 @@
+Sample
+7.4
+95.0
+1.061
+10.00
+13
+1.00 tsp Water Additive 1
+1.00 tsp Water Additive 2
+0.75 tsp Water Additive 3
+22.0 lbs Base Malt
+1.00 lbs Specialty Malt 1
+8.00 oz  Specialty Malt 2
+1.89 oz  Hops 1
+1.89 oz  Hops 2
+2 Whirlfloc Tablet
+1.00 tsp Yeast Nutrient
+3.00 oz  Hops 3
+3.00 oz  Hops 4
+1.50 oz  Hops 5
+29.38 qt
+129.8
+5.40
+1
+123.9		
+30
+Grain Name
+152.0
+45
+1
+10
+8.17 gal
+168.0
+1.053
+12.69 gal
+60
+4
+Hops 1 amt
+60
+Haps 2 amt
+30
+Whirlfloc Tablet
+15
+Yeast Nutrient
+15
+3
+Hops 3 amt
+Hops 4 amt
+Hops 5 amt
+10
+68

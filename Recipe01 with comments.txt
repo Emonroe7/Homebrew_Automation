@@ -1,0 +1,50 @@
+Sample	//Name
+7.4		//SRM (Color)
+95.0	//IBU (Bitterness Rating)
+1.061	//OG  (Original Gravity)
+10.00	//Batch size in gallons
+13		//# of Ingredient
+1.00 tsp Water Additive 1
+1.00 tsp Water Additive 2
+0.75 tsp Water Additive 3
+22.0 lbs Base Malt
+1.00 lbs Specialty Malt 1
+8.00 oz  Specialty Malt 2
+1.89 oz  Hops 1
+1.89 oz  Hops 2
+2 Whirlfloc Tablet
+1.00 tsp Yeast Nutrient
+3.00 oz  Hops 3
+3.00 oz  Hops 4
+1.50 oz  Hops 5
+29.38 qt	//Strike Volume
+129.8		//Strike Water Temp
+5.40		//Desired Mash PH
+1			//# of Steps
+123.9		//Mash Temp
+30			//Time in Min
+Grain Name	//Grain Name to add
+152.0		//Saccarification Temp
+45			//Saccarification Time
+1			//Include Mash Out (0 or 1)
+10			//Mash Out Time
+8.17 gal	//Sparge Volume
+168.0		//Sparge Temp
+1.053		//Preboil Gravity
+12.69 gal	//Boil Volume
+60			//Boil Time
+4			//Number of boil adds
+Hops 1 amt	//Boil add 1 name
+60			//Add at time left
+Haps 2 amt	//Boil add 2 name
+30
+Whirlfloc Tablet 	//Boil 3 add name
+15
+Yeast Nutrient		//Boil 4 add name
+15
+3			//# ofPost Boil steep ingredients
+Hops 3 amt	//Steep 1
+Hops 4 amt	//Steep 2
+Hops 5 amt	//Steep 3
+10			//Steep Time
+68			//Cooling Temp

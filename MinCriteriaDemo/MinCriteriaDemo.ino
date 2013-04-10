@@ -25,13 +25,19 @@
 =	-Add sensor read functionality
 =	-Add auto mode following
 = 	-Add settings support
-=	-Add actuation of relays
 =	-Add manual mode
 =	-Replace man mode in menu with demo mode.
 =	-AHHHHHHHHHHH
+= 
+= Future Improvements:
+= 	-Find better way to handle ingredient names in recipes
+= 	
+= 
 */
 
+//===========================================
 //================ Libraries ================
+//===========================================
 #include <EEPROM.h>
 #include <Wire.h>
 #include <LiquidTWI.h>
@@ -84,7 +90,7 @@ const prog_char PROGMEM YN_YES[]=">YES< NO ";
 const prog_char PROGMEM YN_NO[]=" YES >NO<";          
 const char *yn_items[]= {YN_YES, YN_NO};		//Used to easily go between Yes and No dialog selections
 const char LED_address[] = {0x71, 0x72, 0x73};	//I2C addresses of LED Displays
-const prog_char PROGMEM HLT_TEMP[] = {0x28, 0x13, 0xCE, 0x5C, 0x04, 0x00, 0x00, 0xC8};
+const prog_char PROGMEM HLT_TEMP[] = {0x28, 0x13, 0xCE, 0x5C, 0x04, 0x00, 0x00, 0xC8};	//1Wire Addresses of Temp sensors
 const prog_char PROGMEM MLT_TEMP[] = {0x28, 0xB4, 0x04, 0x5D, 0x04, 0x00, 0x00, 0x01};
 const prog_char PROGMEM BK_TEMP[] = {0x28, 0x61, 0x22, 0x5D, 0x04, 0x00, 0x00, 0x4A};
 const char *temp_sensors[] = {HLT_TEMP, MLT_TEMP, BK_TEMP};
@@ -93,6 +99,7 @@ const char *temp_sensors[] = {HLT_TEMP, MLT_TEMP, BK_TEMP};
 //Relay Schedule: 0 = OFF, 1 = ON, 2 = DON'T CARE (INTERPRET AS 0 FOR NOW)
 //Could possibly use a bit field structure. (http://www.sgi.com/tech/stl/bit_vector.html for bit<vector>
 //bit field structs: http://stackoverflow.com/questions/1772395/c-bool-array-as-bitfield 
+//Arduino bitRead: http://arduino.cc/en/Reference/BitRead
 const prog_uint8_t PROGMEM HLT_FILL[] = 	{1,0,1,0,1,0,0,0,0,0,0,0};
 const prog_uint8_t PROGMEM HLT_RECIRC[] = 	{1,0,0,1,1,0,0,0,0,0,0,0};
 const prog_uint8_t PROGMEM STRIKE_TRANS[] = {1,0,0,1,0,1,0,0,0,0,0,0};
@@ -106,7 +113,7 @@ const prog_uint8_t PROGMEM COOL[] = 		{1,1,0,1,1,0,0,1,1,0,0,1};
 const prog_uint8_t PROGMEM FILL_FERM[] =  	{0,1,0,0,0,0,0,1,0,0,1,0};
 const prog_uint8_t PROGMEM DRAIN_HLT[] =  	{1,1,0,1,0,1,0,1,0,0,1,1};
 const prog_uint8_t PROGMEM ERROR[] =		{0,0,0,0,0,0,0,0,0,0,0,0};	//Hopefully not needed
-const uint8_t chipSelect = 53;	// SD chip select pin
+const prog_uint8_t PROGMEM chipSelect = 53;	// SD chip select pin
 
 //Object creation
 SdFat sd;
@@ -119,20 +126,24 @@ LiguidTWI lcd(0);				//Create LCD screen object
 int pulses, A_SIG=0, B_SIG=0;	//Rotary Encoder Variables
 
 
-//Process Enumeration. Using because it increases readability of code
-enum STEP {ST_MENU, ST_READY, ST_FILL, ST_STRIKE, ST_MASH_IN, ST_STEP_MASH_IN, ST_MASH, ST_SPARGE, 
+//Process Enumeration. Using because it increases readability of code. Have extras here, will clean out later
+enum STEP {ST_MENU, ST_READY, ST_FILL, ST_STRIKE, ST_MASH_IN, ST_STEP_MASH_IN, ST_MASH, ST_MASH_OUT, ST_SPARGE, 
 		   ST_BOIL, ST_COOL, ST_FILLFERM, ST_DONE, ST_DRAIN, ST_DRAIN_MLT, ST_DRAIN_HLT, ST_CIP, ST_ERROR};
 enum MODE {AUTO = 1, MANUAL, SETTINGS};
 bool SD_Present = false;
-bool SD_ERROR = false;			//Possibly use
-int pulses, A_SIG=0, B_SIG=0;	//Rotary Encoder Variables
-
+bool SD_ERROR = false;	//Possibly use
+bool step_done = false;	
+uint_16_t HLT_raw;		//Raw HLT temp sensor reading
+uint_16_t MLT_raw;		//Raw MLT temp sensor reading
+uint_16_t BK_raw;		//Raw BK temp sensor reading
 
 //System Params (need to store in EEPROM later for settings menu)
 float mash_out_temp = 168.0;	//Mashout temp in Farenheight
 float vessel_ht = 17.0;			//Height of vessel in inches
 float vessel_diam = 16.0;		//Diameter of vessel in inches
-//Store default step times and temps for manual mode 
+int press_sensor_ht = 1;		//Pressure sensor height above tank bottom (in inches).
+int act_time = 6000;			//Time it takes for slowest valve to actuate (in ms).
+//TODO: Store default step times and temps for manual mode 
 
 
 //Recipe Variables
@@ -169,7 +180,10 @@ struct recipe{
 	float cooling_temp;
 } myRecipe;
 
+
+//=======================================================
 //================= Function Prototypes =================
+//=======================================================
 void Init_Disp();
 void Splash_screen();
 void Main_Menu(); 
@@ -179,7 +193,7 @@ bool Parse_Recipe_List();
 void Parse_Recipe();
 void Actuate_Relays(char*&);
 void Update_LED();
-void Read_Sensors(byte sensors);
+void Read_Sensors(uint_8_t);
 void CalcVolume(int, float);		//By each tank, or all at once?
 float CalcTempF(float);
 void A_RISE();
@@ -238,8 +252,9 @@ void setup()
 	pinMode(32, OUTPUT);	//PC5
 	pinMode(33, OUTPUT);	//PC4
 	pinMode(34, OUTPUT);	//PC3 -Alarm
-	pinMode(53, OUTPUT);	// Chip Select on MEGA for  SD card. Must be an output.
+	pinMode(53, OUTPUT);	//Chip Select on MEGA for  SD card. Must be an output.
 	
+	//Check to see if SD card is present
 	if (!sd.begin(chipSelect, SPI_HALF_SPEED))	//TODO: FIX HALFSPEED HERE
 		sd.initErrorHalt(); //Later, throw dialog error and ask for SD insert on LCD
 
@@ -346,81 +361,146 @@ void Main_Menu(){
 }
 
 void Auto_Brew(){
-	switch(STEP)
+	step_done = false;
+	while (!step_done)
 	{
-		case ST_MENU:
-			lcd.clear();
-			lcd.setCursor(2,1);
-			lcd.print(LOAD_RECIPES);
-			if(!Parse_Recipe_List())
-			{
-				//Scan
-			}
+		switch(STEP)
+		{
+			case ST_MENU:
+				lcd.clear();
+				lcd.setCursor(2,1);
+				lcd.print(LOAD_RECIPES);
+				if(!Parse_Recipe_List())	//Scan SD for all recipes
+				{			}	//No recipes found error
 				
-			/*
-			Scan SD card and find all files
-			load file menu stuff (another function?)
-			*/
-		break;
-		
-		case ST_READY:
-			/*
-			Select and parse all recipe vars into data structure
-			Display all ingredients.
-			*/
-		break;
-		
-		case ST_FILL:
-		//Fill HLT till at till at level in file
-		break;
-		
-		case ST_STRIKE;
-		//Heat up HLT, add water additives
-		break;
-		
-		case ST_MASH_IN;
-		//Transfer, recirc., 
-		break;
-		
-		case ST_STEP_MASH_IN;
-		//Transfer in interval if mash in temp above a certain amount, recirc., 
-		break;
-		
-		case ST_MASH:
-		//Follow Mash Schedule
-		break;
-		
-		case ST_SPARGE: 
-			//Pump out slowly, pump in as needed switching between 2 relay profiles
-			//Stop pumping when BK level reaches calculated volume with pre-boil gravity
-		break; 
-		
-		case ST_BOIL:
-			//Boil and sound alarm and update LCD following schedule
-		break;
-		
-		case ST_STEEP:
-			//Display names of add on LCD
-			//Wait, but allow user to continue at press of confirm button
-		break;
-		
-		case ST_COOL:
-			//Cool till at cool temp
-		break;
-		
-		case ST_FERMFILL:
-			//Don't drain until confirm (possibly flush first from HLT)
-		break;
-		
-		case ST_DRAIN:
-			//Wait till confirm to drain
-		break;
-		
-		default:
-			while(1)//Halt, error
-		break;	
+				/*
+				Load file menu stuff (another function?)
+				Load 3 names per page.
+				*/
+			break;
+			
+			case ST_READY:
+				/*
+				Select and parse all recipe vars into data structure
+				Display all ingredients.
+				*/
+			break;
+			
+			case ST_FILL:
+				/*
+				Fill HLT till at level corresponding to myRecipe.strike_vol
+				*/
+			break;
+			
+			case ST_STRIKE;
+				/*
+				Heat up HLT to myRecipe.strike_temp, add water additives
+				*/
+			break;
+			
+			case ST_MASH_IN;
+				/*
+				If strike_temp < stepin_threshold -> continue,
+				else STEP = ST_STEP_MASH_IN
+				
+				Pump out of HLT until vol(orginal_ht-now_ht) = strike_vol
+				After an initial waiting time (to allow water to reach wort pump)
+				turn on wort pump to recirc 
+				
+				
+				TODO: ADD stepin_threshold variable (eventually make it a setting)
+				*/
+			break;
+			
+			case ST_STEP_MASH_IN;
+				/*
+				Transfer in interval if strike_temp above a certain amount, recirc., 
+				Turn Water side pump (22) on and of for intervals of time.
+				After trans. myRecipe.strike_vol, STEP = ST_MASH
+				*/
+			break;
+			
+			case ST_MASH:
+				/*
+				Follow Mash Schedule
+				-Bring HLT to 
+				
+				
+				Continue when curr_mash_step > myRecipe.num_mash_steps;
+				-Using > b/c we want to complete each step, advance, see 
+				 there isn't corresponding step, then move on.
+				-DONT FORGET SACCH!!!! ALWAYS HAVE SACCH as last step.
+				
+				
+				If myRecipe.mash_out == 1 -> STEP = ST_MASH_OUT
+				else STEP = ST_SPARGE
+				*/
+			break;
+			
+			case ST_MASH_OUT:
+				/*
+				Bring HLT and MLT up to myRecipe.mash_out_temp
+				Recirc MLT through HLT coil
+				After myRecipe.mash_out_time reached, continue to sparge.
+				*/
+			break;
+			
+			case ST_SPARGE: 
+				/*
+				Pump out slowly, pump in as needed turing pump 1 on/off as required.
+				-(or switching between 2 relay profiles(takes much longer))
+				Stop pumping when BK level reaches calculated volume with pre-boil gravity
+				*/
+			break; 
+			
+			case ST_BOIL:
+				/*
+				Boil and sound alarm and update LCD following schedule.
+				Also perform drainage op on MLT while pump is unoccupied.
+				-Always prompt user to confirm befor operating drain
+				*/
+			break;
+			
+			case ST_STEEP:
+				/*
+				Display names of adds on LCD (myRecipe.steep_add_name[][])
+				Wait till either myRecipe.steep_time reached or confirm btn pressed
+				*/
+			break;
+			
+			case ST_COOL:
+				/*
+				Cool till at myRecipe.cooling_temp
+				Whirlpooling in Boil Kettle to filter debris happens here.
+				*/
+			break;
+			
+			case ST_FERMFILL:
+				/*
+				Don't drain until confirm (possibly flush first from HLT->Cleaned MLT)
+				Pause upon another confirm after a minimum time passed (5sec or so).
+				-Offer to 	>Continue Filling
+				-or			-Next Step (Drain System)	
+				For now, this is final step.
+				*/
+			break;
+			
+			case ST_DRAIN:
+				/*
+				Wait till confirm to drain all tanks (implement later)
+				
+				*/
+			break;
+			
+			default:
+				/*
+				Display "CRITICAL ERROR" on screen.
+				Stop pumps, write 0 to at least water supply valve, then stop program.
+				*/
+				while(1)//Halt, error
+			break;	
 		}
-	
+	}
 }
 
 void Settings_Menu(){	//TODO: Later
@@ -428,7 +508,7 @@ void Settings_Menu(){	//TODO: Later
 		Find out what kind of settings Jim will want
 		These then need to be stored in EEPROM memory to stick around after power down.
 		
-		Time, Date, Actuation time, Defaults for manual mode.
+		Time, Date, Actuation time, Defaults for manual mode, etc.
 	*/
 }
 
@@ -441,7 +521,7 @@ int Parse_Recipe_List(){
 		When found, open and read first line to get name.
 		Close file and continue searching SD card contents.
 		Possibly write file names and recipe names to files to store, then read from this file for recipe list;
-		***DON'T FORGET TO SYNC***
+		***DON'T FORGET TO SYNC OR REWIND DIRECTORY***
 		
 		see OpenNext example
 	*/
@@ -451,6 +531,7 @@ int Parse_Recipe_List(){
 void Parse_Recipe(){
 	/*
 		HEADACHE
+		Uses standard ifstream and oftream objects
 		Write to data structure
 		Use .getLine from sdfat library if using .txt (see sample)
 		Decide whether or not using .csv or .txt
@@ -483,8 +564,7 @@ void Actuate_Relays(uint_8* &ptr_schedule){
 	digitalWrite(32, ptr_schedule[10]);
 	digitalWrite(33, ptr_schedule[11]);
 	
-	delay(actTime);
-	
+	delay(act_time);
 	
 }
 
@@ -501,12 +581,13 @@ void Update_LED(){ //possibly use Pointers to direct LED display vars to the cor
 	*/
 }
 
-void Read_Sensors(){
+void Read_Sensors(uint_8_t sensor_read){
 	/*
-		Take in 6 (later 7) bools to know which sensors to check.
-		Save processing time
-		Do ananlog reads on pressure sensors and read temps with oneWire
+	Take in 6 (later 7) bools to know which sensors to check.
+		-Save processing time (take a look at bitRead arduino function to parse Binary
+	Do ananlog reads on pressure sensors and read temps with oneWire
 	*/
+	if (bitRead(sensor_read)
 }
 
 void CalcVolume(int tankNum, float specificGrav){

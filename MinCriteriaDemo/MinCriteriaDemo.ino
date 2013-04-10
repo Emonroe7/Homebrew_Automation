@@ -23,7 +23,7 @@
 =	-Add time tracking
 =	-Add oneWire sensor data (addresses and locations)
 =	-Add sensor read functionality
-=	-Add auto mode following
+=	-Add auto mode following recipe
 = 	-Add settings support
 =	-Add manual mode
 =	-Replace man mode in menu with demo mode.

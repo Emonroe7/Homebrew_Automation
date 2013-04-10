@@ -13,7 +13,7 @@
 = Rotary Encoder uses INT4(pin 19)A INT5(pin 18)B
 = Pins 22-33 are used for relays for pumps and valves.
 = Pin 34 is alarm.
-= Analog 
+= Analog 0,1,2 for pressure sensor inputs
 = 
 = TO DO (no particular order):
 = 	-Add buttons for control

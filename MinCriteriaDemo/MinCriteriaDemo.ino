@@ -82,11 +82,17 @@ const prog_char PROGMEM CONFIRM[] = " CONFIRM";
 const prog_char PROGMEM CONFIRM_SEL[] = ">CONFIRM";
 const prog_char PROGMEM YN_YES[]=">YES< NO ";          
 const prog_char PROGMEM YN_NO[]=" YES >NO<";          
-const char *yn_items[]= {YN_YES,YN_NO};			//Used to easily go between Yes and No dialog selections
+const char *yn_items[]= {YN_YES, YN_NO};		//Used to easily go between Yes and No dialog selections
 const char LED_address[] = {0x71, 0x72, 0x73};	//I2C addresses of LED Displays
+const prog_char PROGMEM HLT_TEMP[] = {0x28, 0x13, 0xCE, 0x5C, 0x04, 0x00, 0x00, 0xC8};
+const prog_char PROGMEM MLT_TEMP[] = {0x28, 0xB4, 0x04, 0x5D, 0x04, 0x00, 0x00, 0x01};
+const prog_char PROGMEM BK_TEMP[] = {0x28, 0x61, 0x22, 0x5D, 0x04, 0x00, 0x00, 0x4A};
+const char *temp_sensors[] = {HLT_TEMP, MLT_TEMP, BK_TEMP};
+
 
 //Relay Schedule: 0 = OFF, 1 = ON, 2 = DON'T CARE (INTERPRET AS 0 FOR NOW)
-//Could possibly use a bit field structure.
+//Could possibly use a bit field structure. (http://www.sgi.com/tech/stl/bit_vector.html for bit<vector>
+//bit field structs: http://stackoverflow.com/questions/1772395/c-bool-array-as-bitfield 
 const prog_uint8_t PROGMEM HLT_FILL[] = 	{1,0,1,0,1,0,0,0,0,0,0,0};
 const prog_uint8_t PROGMEM HLT_RECIRC[] = 	{1,0,0,1,1,0,0,0,0,0,0,0};
 const prog_uint8_t PROGMEM STRIKE_TRANS[] = {1,0,0,1,0,1,0,0,0,0,0,0};
@@ -234,7 +240,7 @@ void setup()
 	pinMode(34, OUTPUT);	//PC3 -Alarm
 	pinMode(53, OUTPUT);	// Chip Select on MEGA for  SD card. Must be an output.
 	
-	if (!sd.begin(chipSelect, SPI_HALF_SPEED)) 
+	if (!sd.begin(chipSelect, SPI_HALF_SPEED))	//TODO: FIX HALFSPEED HERE
 		sd.initErrorHalt(); //Later, throw dialog error and ask for SD insert on LCD
 
 }
@@ -417,7 +423,7 @@ void Auto_Brew(){
 	
 }
 
-void Settings_Menu(){
+void Settings_Menu(){	//TODO: Later
 	/*
 		Find out what kind of settings Jim will want
 		These then need to be stored in EEPROM memory to stick around after power down.

@@ -136,6 +136,9 @@ bool step_done = false;
 uint_16_t HLT_raw;		//Raw HLT temp sensor reading
 uint_16_t MLT_raw;		//Raw MLT temp sensor reading
 uint_16_t BK_raw;		//Raw BK temp sensor reading
+uint_16_t HLT_pres;
+uint_16_t MLT_pres;
+uint_16_t BK_pres;
 
 //System Params (need to store in EEPROM later for settings menu)
 float mash_out_temp = 168.0;	//Mashout temp in Farenheight

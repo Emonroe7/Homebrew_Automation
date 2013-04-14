@@ -42,12 +42,14 @@
 #include <Wire.h>
 #include <LiquidTWI.h>
 #include <OneWire.h>
+#include <DallasTemperature.h>
 #include <SdFat.h>
 #include <Button.h>
 #include <RTClib.h>
 
 
 #define SERIAL_OUTPUT_DEBUG 1
+#define TEMPERATURE_PRECISION 9	//Precision to use for Dallas 1 wire devices
 #define READ_FROM_SD_CARD 0
 #define HEATING_PRESENT 0		//0 until we add heating capabilities
 #define MAX_RECIPE_NUM 5		//Change to allocate more space to store recipe names
@@ -90,10 +92,6 @@ const prog_char PROGMEM YN_YES[]=">YES< NO ";
 const prog_char PROGMEM YN_NO[]=" YES >NO<";          
 const char *yn_items[]= {YN_YES, YN_NO};		//Used to easily go between Yes and No dialog selections
 const char LED_address[] = {0x71, 0x72, 0x73};	//I2C addresses of LED Displays
-const prog_char PROGMEM HLT_TEMP[] = {0x28, 0x13, 0xCE, 0x5C, 0x04, 0x00, 0x00, 0xC8};	//1Wire Addresses of Temp sensors
-const prog_char PROGMEM MLT_TEMP[] = {0x28, 0xB4, 0x04, 0x5D, 0x04, 0x00, 0x00, 0x01};
-const prog_char PROGMEM BK_TEMP[] = {0x28, 0x61, 0x22, 0x5D, 0x04, 0x00, 0x00, 0x4A};
-const char *temp_sensors[] = {HLT_TEMP, MLT_TEMP, BK_TEMP};
 
 
 //Relay Schedule: 0 = OFF, 1 = ON, 2 = DON'T CARE (INTERPRET AS 0 FOR NOW)
@@ -114,6 +112,10 @@ const prog_uint8_t PROGMEM FILL_FERM[] =  	{0,1,0,0,0,0,0,1,0,0,1,0};
 const prog_uint8_t PROGMEM DRAIN_HLT[] =  	{1,1,0,1,0,1,0,1,0,0,1,1};
 const prog_uint8_t PROGMEM ERROR[] =		{0,0,0,0,0,0,0,0,0,0,0,0};	//Hopefully not needed
 const prog_uint8_t PROGMEM chipSelect = 53;	// SD chip select pin
+DeviceAddress hlt_temp, mlt_temp, bk_temp;
+hlt_temp = {0x28, 0x13, 0xCE, 0x5C, 0x04, 0x00, 0x00, 0xC8};
+mlt_temp = {0x28, 0xB4, 0x04, 0x5D, 0x04, 0x00, 0x00, 0x01};
+bk_temp = {0x28, 0x61, 0x22, 0x5D, 0x04, 0x00, 0x00, 0x4A};
 
 //Object creation
 SdFat sd;
@@ -122,6 +124,7 @@ FatReader root;
 ArduinoOutStream cout(Serial);	//Create a serial output stream for SDFat
 RTC_DS1307 RTC;
 OneWire  ds(10);  				//OneWire devices connected to pin #10 (to change pin, change number)
+DallasTemperature temp_sense(&ds);	//Extends and simplifies the OneWire library
 LiguidTWI lcd(0);				//Create LCD screen object
 int pulses, A_SIG=0, B_SIG=0;	//Rotary Encoder Variables
 
@@ -133,9 +136,9 @@ enum MODE {AUTO = 1, MANUAL, SETTINGS};
 bool SD_Present = false;
 bool SD_ERROR = false;	//Possibly use
 bool step_done = false;	
-uint_16_t HLT_raw;		//Raw HLT temp sensor reading
-uint_16_t MLT_raw;		//Raw MLT temp sensor reading
-uint_16_t BK_raw;		//Raw BK temp sensor reading
+float hlt_degC;
+float mlt_degC;
+float bk_degC;
 uint_16_t HLT_pres;
 uint_16_t MLT_pres;
 uint_16_t BK_pres;
@@ -205,7 +208,10 @@ void B_RISE();
 void B_FALL();
 
 
-//************* MAIN PROGRAM ************
+
+//========================================================
+//==================== MAIN PROGRAM ======================
+//========================================================
 void setup()
 {
 	Serial.begin(9600);
@@ -229,6 +235,22 @@ void setup()
         Wire.endTransmission();  // End communication with this selected module.
     }
 	
+	//Setup the OneWire Temp sensors.
+	temp_sense.begin();
+	//Set Resolution (9 bit should be plenty)
+	temp_sense.setResolution(hlt_temp, TEMPERATURE_PRECISION);
+	temp_sense.setResolution(mlt_temp, TEMPERATURE_PRECISION);
+	temp_sense.setResolution(bk_temp, TEMPERATURE_PRECISION);
+	//Output debug msg over serial
+	Serial.print("Device 0 Resolution: ");
+	Serial.print(temp_sense.getResolution(hlt_temp), DEC); 
+	Serial.println();
+	Serial.print("Device 1 Resolution: ");
+	Serial.print(temp_sense.getResolution(mlt_temp), DEC); 
+	Serial.println();
+	Serial.print("Device 2 Resolution: ");
+	Serial.print(temp_sense.getResolution(bk_temp), DEC); 
+	Serial.println();
 	
 	//Splash_screen();
 	//Disp name of project, and other info.
@@ -244,7 +266,7 @@ void setup()
 	//Setup pins for pumps, solenoid valves, and alarm.
 	pinMode(22, OUTPUT);	//PA0 -Water pump
 	pinMode(23, OUTPUT);	//PA1 -Wort pump
-	pinMode(24, OUTPUT);	//PA2
+	pinMode(24, OUTPUT);	//PA2 -Water Supply valve
 	pinMode(25, OUTPUT);	//PA3
 	pinMode(26, OUTPUT);	//PA4
 	pinMode(27, OUTPUT);	//PA5
@@ -258,7 +280,7 @@ void setup()
 	pinMode(53, OUTPUT);	//Chip Select on MEGA for  SD card. Must be an output.
 	
 	//Check to see if SD card is present
-	if (!sd.begin(chipSelect, SPI_HALF_SPEED))	//TODO: FIX HALFSPEED HERE
+	if (!sd.begin(chipSelect, SPI_FULL_SPEED))
 		sd.initErrorHalt(); //Later, throw dialog error and ask for SD insert on LCD
 
 }
@@ -567,6 +589,7 @@ void Actuate_Relays(uint_8* &ptr_schedule){
 	digitalWrite(32, ptr_schedule[10]);
 	digitalWrite(33, ptr_schedule[11]);
 	
+	//Allow time for valves to completely actuate
 	delay(act_time);
 	
 }
@@ -590,7 +613,7 @@ void Read_Sensors(uint_8_t sensor_read){
 		-Save processing time (take a look at bitRead arduino function to parse Binary
 	Do ananlog reads on pressure sensors and read temps with oneWire
 	*/
-	if (bitRead(sensor_read)
+	if (bitRead(sensor_read,0)
 }
 
 void CalcVolume(int tankNum, float specificGrav){
@@ -602,7 +625,7 @@ void CalcVolume(int tankNum, float specificGrav){
 	*/
 }	
 
-float CalcTempF(float degC){
+float CalcTempF(float degC){ //Use DallasTemperature::toFahrenheit(tempC)
 	float degF = 0;
 	degF = degC*1.8 + 32.0;
 	return degF;
@@ -618,8 +641,7 @@ void A_RISE(){
 		pulses++;	//Clockwise
 	if(B_SIG==1)
 		pulses--;	//Counter-Clockwise
-	if(SERIAL_OUTPUT_DEBUG)
-		Serial.println(pulses);
+	Serial.println(pulses);
 	attachInterrupt(4, A_FALL, FALLING);
 }
 void A_FALL(){
@@ -630,8 +652,7 @@ void A_FALL(){
 		pulses++;	//Clockwise
 	if(B_SIG==0)
 		pulses--;	//Counter-Clockwise
-	if(SERIAL_OUTPUT_DEBUG)
-		Serial.println(pulses);
+	Serial.println(pulses);
 	attachInterrupt(4, A_RISE, RISING);
 }
 void B_RISE(){
@@ -642,8 +663,7 @@ void B_RISE(){
 		pulses++;	//Clockwise
 	if(B_SIG==0)
 		pulses--;	//Counter-Clockwise
-	if(SERIAL_OUTPUT_DEBUG)
-		Serial.println(pulses);
+	Serial.println(pulses);
 	attachInterrupt(5, B_FALL, FALLING);
 }	
 void B_FALL(){
@@ -654,7 +674,6 @@ void B_FALL(){
 		pulses++;	//Clockwise
 	if(B_SIG==1)
 		pulses--;	//Counter-Clockwise
-	if(SERIAL_OUTPUT_DEBUG)
-		Serial.println(pulses);
+	Serial.println(pulses);
 	attachInterrupt(5, B_RISE, RISING);
 }

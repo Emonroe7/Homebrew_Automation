@@ -110,35 +110,36 @@ const char *yn_items[]= {YN_YES, YN_NO};		//Used to easily go between Yes and No
 
 
 //Setup array to access from within program
-const char *string_table[] = {
+PROGMEM const char *string_table[] = {
 	SPLASH1,			//0
 	SPLASH2,			//1
 	SPLASH3,			//2
 	CHOOSE_MODE,		//3
-	MANUAL_BREW_OPT,	//4
-	SETTINGS_OPT,		//5
-	CREDITS_OPT,		//6
-	CREDITS_TITLE,		//7
-	J_DUNN,				//8
-	R_BALDWIN,			//9
-	L_MATTHEWS,			//10
-	J_CANADY,			//11
-	E_MONROE,			//12
-	LOADING,			//13
-	NUM_REC_FOUND,		//14
-	CHOOSE_RECIPE1,		//15
-	CHOOSE_RECIPE2,		//16
-	PAGE_LINE,			//17
-	LOADING_R,			//18
-	CONFIRM_CONT,		//19
-	CUR_STEP,			//20
-	MASH_PH,			//21
-	CONFIRM,			//22
-	PREV,				//23
-	NEXT				//24
+	AUTO_BREW_OPT,		//4
+	MANUAL_BREW_OPT,	//5
+	SETTINGS_OPT,		//6
+	CREDITS_OPT,		//7
+	CREDITS_TITLE,		//8
+	J_DUNN,				//9
+	R_BALDWIN,			//10
+	L_MATTHEWS,			//11
+	J_CANADY,			//12
+	E_MONROE,			//13
+	LOADING,			//14
+	NUM_REC_FOUND,		//15
+	CHOOSE_RECIPE1,		//16
+	CHOOSE_RECIPE2,		//17
+	PAGE_LINE,			//18
+	LOADING_R,			//19
+	CONFIRM_CONT,		//20
+	CUR_STEP,			//21
+	MASH_PH,			//22
+	CONFIRM,			//23
+	PREV,				//24
+	NEXT				//25
 	
 };
-//Extract data with: strcpy_P(mem_cpy, (char*)pgm_read_word(&(string_table[0])));
+//Extract data with: strcpy_P(mem_cpy, (char*)pgm_read_word(&(string_table[i])));
 //where i = index of desired string
 char mem_cpy[21];
 }//REMOVE
@@ -198,16 +199,16 @@ enum STEP {ST_MENU, ST_READY, ST_FILL, ST_STRIKE, ST_MASH_IN, ST_STEP_MASH_IN, S
 enum MODE {AUTO = 1, MANUAL, SETTINGS};
 
 //Program Global Variables
-boolean SD_Present = FALSE;
-boolean SD_ERROR = FALSE;	//Possibly use
-boolean step_done = FALSE;	
+boolean SD_Present = false;
+boolean SD_ERROR = false;	//Possibly use
+boolean step_done = false;	
 int HLT_pres, MLT_pres, BK_pres;	//RAW pressor sensor readings
 float HLT_ht, MLT_ht, BK_ht;
 float des_HLT_ht, des_MLT_ht, des_BK_ht;
 float HLT_degC, MLT_degC, BK_degC;
 float HLT_degF, MLT_degF, BK_degF;
 boolean selectionMade;
-//boolean rec_selected = FALSE;
+//boolean rec_selected = false;
 byte num_found = 0;			//Number of found recipes
 byte tot_page_num = 0;
 byte curr_page_num = 0;
@@ -216,7 +217,7 @@ byte cursorLoc;
 byte cursorX, cursorY;
 boolean blinkState;
 char fName[13];				//Max length of a file name is 8+1(.)+3(ext)+null = 13
-boolean at_temp = FALSE;
+boolean at_temp = false;
 int step_sec_remain = 0;
 byte step_min_remain = 0;
 DateTime now;
@@ -360,7 +361,7 @@ void setup() {
 	lcd.setCursor(6,1);
 	strcpy_P(mem_cpy, (char*)pgm_read_word(&(string_table[1])));
 	lcd.print(mem_cpy);	//SPLASH2
-	lcd.setCursor(0,3)
+	lcd.setCursor(0,3);
 	strcpy_P(mem_cpy, (char*)pgm_read_word(&(string_table[2])));
 	lcd.print(mem_cpy);	//SPLASH3
 	
@@ -411,21 +412,27 @@ void setup() {
 void loop()	{	//Contains Main Menu
 	//MENU SELECTIONS
 	//MODE = Main_Menu();	//Just implemented here. Keeping Function around just in case
-	selectionMade = FALSE;
-	blinkState = TRUE;	//Was previously named cursorState, changed to assoc. more with blinking
+	selectionMade = false;
+	blinkState = true;	//Was previously named cursorState, changed to assoc. more with blinking
 	blinkCnt = 0;
 	cursorLoc = 1;
 	
 	
 	//Display Menu Options
+	lcd.clear();
 	lcd.setCursor(0,0);
-	lcd.print(CHOOSE_MODE);	//Const. strings stored in flash prog mem
+	strcpy_P(mem_cpy, (char*)pgm_read_word(&(string_table[3])));
+	lcd.print(mem_cpy);	//CHOOSE_MODE
 	lcd.setCursor(1,1);
-	lcd.print(AUTO_BREW_OPT);
+	strcpy_P(mem_cpy, (char*)pgm_read_word(&(string_table[4])));
+	lcd.print(mem_cpy);	//AUTO_BREW_OPT
 	lcd.setCursor(1,2);
-	lcd.print(MANUAL_BREW_OPT);
+	strcpy_P(mem_cpy, (char*)pgm_read_word(&(string_table[5])));
+	lcd.print(mem_cpy);	//MANUAL_BREW_OPT
 	lcd.setCursor(1,3);
-	lcd.print(SETTINGS_OPT);	
+	strcpy_P(mem_cpy, (char*)pgm_read_word(&(string_table[6])));
+	lcd.print(mem_cpy);	//SETTINGS_OPT	
+	
 	//Place Cursor in initial location
 	lcd.setCursor(0, cursorLoc);	//Set cursor leftmost pos on line 1 (not 0)
 	lcd.print(">");		//Print cursor to screen
@@ -440,12 +447,12 @@ void loop()	{	//Contains Main Menu
 		//Blink Cursor
 		if (blinkCnt == blinkMax){
 			lcd.setCursor(0,cursorLoc);
-			if (blinkState == TRUE){
+			if (blinkState == true){
 				lcd.print(" ");
-				blinkState = FALSE;
-			} else if (blinkState == FALSE) {
+				blinkState = false;
+			} else if (blinkState == false) {
 				lcd.print(">");
-				blinkState = TRUE;
+				blinkState = true;
 			}
 			blinkCnt = 0;
 		} else {	
@@ -453,15 +460,15 @@ void loop()	{	//Contains Main Menu
 		}
 		
 		//Process buttons
-		if(confirm.uniquePress() == TRUE) {	
+		if(confirm.uniquePress() == true) {	
 			//TODO: Process debounce if we encounter a bounce problem in testing.
 			//if (millis()-pressedStartTime > threshold)
-			selectionMade == TRUE;	//Exit menu, go to selected state
-		} else if(dnBtn.uniquePress() == TRUE) {
+			selectionMade == true;	//Exit menu, go to selected state
+		} else if(dnBtn.uniquePress() == true) {
 			//Process debounce if problem
 			//Set cursorLoc down 1 (cursorLoc ++) and make sure within bounds.
 			//Set blinkCnt = blinkMax
-			//Set blinkState = FALSE to turn ensure it is turned on during next loop
+			//Set blinkState = false to turn ensure it is turned on during next loop
 			//Taking advantage of previously written code to ensure cursor is visible
 			lcd.setCursor(0,cursorLoc);	//Clear previous cursor from screen, written in new position by cursor blink script
 			lcd.print(" ");
@@ -470,16 +477,17 @@ void loop()	{	//Contains Main Menu
 			else
 				cursorLoc++;
 			blinkCnt = blinkMax;
-			blinkState = FALSE;
-		} else if(upBtn.uniquePress() == TRUE) {
+			blinkState = false;
+		} else if(upBtn.uniquePress() == true) {
 			//Same as above except cursorLoc --, not ++ to 
 			lcd.setCursor(0,cursorLoc);	//Clear previous cursor from screen, written in new position by cursor blink script
+			lcd.print(" ");
 			if(cursorLoc == 1)
 				cursorLoc = 3;
 			else
 				cursorLoc--;
 			blinkCnt = blinkMax;
-			blinkState = FALSE;
+			blinkState = false;
 		}
 	}
 	//Parse menu selection
@@ -525,7 +533,7 @@ void splash_screen(){
 
 //********** MENUS AND CONTROL LOOPS **********
 void Main_Menu(){
-	boolean selectionMade = FALSE;
+	boolean selectionMade = false;
 	int cursor_loc = 1;
 	
 	//Display Menu
@@ -562,7 +570,7 @@ void Main_Menu(){
 //  ##     ## ##     ##    ##    ##     ##     ##     ## ##    ##  ##       ##  ##  ## 
 //  ##     ##  #######     ##     #######      ########  ##     ## ########  ###  ###  
 void Auto_Brew(){
-	step_done = FALSE;
+	step_done = false;
 	byte sense = B00000000;
 	STEP = ST_MENU;
 
@@ -570,8 +578,8 @@ void Auto_Brew(){
 	{
 		switch(STEP){
 			case ST_MENU: {	//Done	//Could break most of this out into other functions later
-				selectionMade = FALSE;
-				blinkState = TRUE;	//Was previously named cursorState, changed to assoc. more with blinking
+				selectionMade = false;
+				blinkState = true;	//Was previously named cursorState, changed to assoc. more with blinking
 				blinkCnt = 0;
 				cursorLoc = 0;
 				byte entries;	//Place to store number of valid entries on current page
@@ -590,8 +598,8 @@ void Auto_Brew(){
 					lcd.setCursor(1,2);
 					lcd.print("Returning to Menu");
 					delay(5000);
-					step_done = TRUE;
-					selectionMade = TRUE;
+					step_done = true;
+					selectionMade = true;
 					break;
 				}
 				
@@ -601,15 +609,18 @@ void Auto_Brew(){
 				//Display results
 				lcd.clear();
 				lcd.setCursor(0,0);
-				lcd.print(NUM_REC_FOUND);
+				strcpy_P(mem_cpy, (char*)pgm_read_word(&(string_table[15])));
+				lcd.print(mem_cpy);	//NUM_REC_FOUND
 				lcd.setCursor(17,0);
 				lcd.print(num_found);
 				delay(1500);
 				//Display instructions
 				lcd.setCursor(0,2);
-				lcd.print(CHOOSE_RECIPE1);
+				strcpy_P(mem_cpy, (char*)pgm_read_word(&(string_table[16])));
+				lcd.print(mem_cpy);	//CHOOSE_RECIPE1
 				lcd.setCursor(0,3);
-				lcd.print(CHOOSE_RECIPE2);
+				strcpy_P(mem_cpy, (char*)pgm_read_word(&(string_table[17])));
+				lcd.print(mem_cpy);	//CHOOSE_RECIPE2
 				delay(3000);
 				
 				//Load first menu page
@@ -620,12 +631,12 @@ void Auto_Brew(){
 					//Blink Cursor
 					if (blinkCnt == blinkMax) {
 						lcd.setCursor(cursorX,cursorY);
-						if (blinkState == TRUE){
+						if (blinkState == true){
 							lcd.print(" ");
-							blinkState = FALSE;
-						}else if (blinkState == FALSE) {
+							blinkState = false;
+						}else if (blinkState == false) {
 							lcd.print(">");
-							blinkState = TRUE;
+							blinkState = true;
 						}
 						blinkCnt = 0;
 					}else 
@@ -633,12 +644,13 @@ void Auto_Brew(){
 					
 					
 					//Button Processing
-					if (confirm.uniquePress() == TRUE) {	
+					if (confirm.uniquePress() == true) {	
 						if (cursorLoc <= 3) { //Picked a file
-							selectionMade = TRUE;
+							selectionMade = true;
 							lcd.clear();
 							lcd.setCursor(2,1);
-							lcd.print(LOADING);
+							strcpy_P(mem_cpy, (char*)pgm_read_word(&(string_table[14])));
+							lcd.print(mem_cpy);	//LOADING
 							Get_Rec_fName(curr_page_num, cursorLoc);	//Get file name of chosen recipe
 						}else if(cursorY == 3) { //Load Prev or Next page
 							if (cursorLoc == 4) {	//Previous Page
@@ -647,7 +659,7 @@ void Auto_Brew(){
 								Load_Page(curr_page_num++);
 							}
 						}
-					}else if (dnBtn.uniquePress() == TRUE) {
+					}else if (dnBtn.uniquePress() == true) {
 						lcd.setCursor(cursorX,cursorY);	//Clear previous cursor from screen, written in new position by cursor blink script
 						lcd.print(" ");
 						if ((cursorLoc + 1) <= entries) { 	//Next entry
@@ -668,9 +680,9 @@ void Auto_Brew(){
 							cursorLoc = 1;
 						}
 						blinkCnt = blinkMax;
-						blinkState = FALSE;
+						blinkState = false;
 						
-					}else if (upBtn.uniquePress() == TRUE) {
+					}else if (upBtn.uniquePress() == true) {
 						lcd.setCursor(cursorX,cursorY);	//Clear previous cursor from screen, written in new position by cursor blink script
 						lcd.print(" ");
 						if ((cursorLoc - 1) <= 0) {	//Bottom -> Next
@@ -691,7 +703,7 @@ void Auto_Brew(){
 							cursorLoc--;
 						}
 						blinkCnt = blinkMax;
-						blinkState = FALSE;
+						blinkState = false;
 					}
 				}
 				
@@ -710,7 +722,7 @@ void Auto_Brew(){
 				/* Fill HLT till at level corresponding to myRecipe.strike_vol
 				 */
 				sense = B00000001;	//Just HLT pressure
-				boolean full = FALSE;
+				boolean full = false;
 				
 				des_HLT_ht = 14.5;
 				
@@ -766,7 +778,7 @@ void Auto_Brew(){
 				After an initial waiting time (to allow water to reach wort pump)
 				turn on wort pump to recirc 
 				*/
-				boolean full = FALSE;
+				boolean full = false;
 				//calc des_MLT_ht
 				
 				lcd.clear();
@@ -849,7 +861,7 @@ void Auto_Brew(){
 					//TODO: Implement real PID temp logic
 					//read sensors
 					if (HLT_degF >= mash_out_temp) {
-						at_temp = TRUE;
+						at_temp = true;
 					}
 				}
 				
@@ -964,7 +976,7 @@ byte Get_Num_Recipes(){
 	while (file.openNext(sd.vwd(), O_READ)) {
 		file.printName(&Serial);	
 		cout << ' ' << endl;
-		if (file.isFile() == TRUE){	//File is a normal text file.
+		if (file.isFile() == true){	//File is a normal text file.
 			num_recipes++;
 		}
 		file.close();
@@ -989,18 +1001,16 @@ byte Load_Page(byte page){
 	//Get to desired directory location
 	if((page < curr_page_num) || (page == 0)) {
 		root.rewind();
-//		if (page != 0) {	//Following for loop shouldn't run if page == 1, but just in case
 		for(int i = 0; i < (page*3);) {	//If page 1 (so 2nd real page) go through 3 valid files that won't be displayed.
 			file.openNext(sd.vwd(), O_READ);
 			cout << 'Skip file: ';
 			file.printName(&Serial);
 			cout << endl;
-			if (file.isFile() == TRUE){	//Is file is a normal text file?
+			if (file.isFile() == true){	//Is file is a normal text file?
 				i++;	//Increment inside loop. Only want valid files. Bit more robust.
 			}
 			file.close();
 		}
-//		}
 	}
 	
 	lcd.clear();
@@ -1020,13 +1030,14 @@ byte Load_Page(byte page){
 			}
 		}
 		else	//No valid files left
-		{	none_left = TRUE;	}
+		{	none_left = true;	}
 	}
 
 	//Add stuff on bottom line. Currently only good for <30 recipes, but should be enough for awhile.
 	//TODO: ADD functionality to remove bottom line if 
 	lcd.setCursor(0,3);
-	lcd.print(PAGE_LINE);
+	strcpy_P(mem_cpy, (char*)pgm_read_word(&(string_table[18])));
+	lcd.print(mem_cpy);	//PAGE_LINE
 	lcd.setCursor(3,3);
 	lcd.print(page + 1);	//Page 0 will show as Page 1
 	lcd.setCursor(6,3);
@@ -1039,7 +1050,7 @@ byte Load_Page(byte page){
 	//lcd.setCursor(cursorX,cursorY);
 	//lcd.print(">");
 	blinkCnt = blinkMax;
-	blinkState = FALSE;
+	blinkState = false;
 	
 	curr_page_num = page;
 	return good_entries;
@@ -1055,7 +1066,7 @@ void Get_Rec_fName(byte page, byte entry_num){
 		cout << 'Skip file: ';
 		file.printName(&Serial);
 		cout << endl;
-		if (file.isFile() == TRUE){	//Is file is a normal text file?
+		if (file.isFile() == true){	//Is file is a normal text file?
 			i++;	//Increment inside loop. Only want valid files. Bit more robust.
 		}
 		if (i < dir_index) {	//Evaluate after increment for valid file, don't close last file before escaping loop.
@@ -1101,7 +1112,8 @@ void Parse_Recipe(){	//Preliminarily DONE
 		lcd.setCursor(15,2);
 		lcd.print(myRecipe.batch_size);
 		lcd.setCursor(0,3);
-		lcd.print(CONFIRM_CONT);
+		strcpy_P(mem_cpy, (char*)pgm_read_word(&(string_table[20])));
+		lcd.print(mem_cpy);	//CONFIRM_CONT
 		while(!confirm.uniquePress()){ }
 		lcd.clear();
 		delay(500);
@@ -1109,11 +1121,13 @@ void Parse_Recipe(){	//Preliminarily DONE
 		lcd.setCursor(0,1);
 		lcd.print("Ing1: Water");
 		lcd.setCursor(0,3);
-		lcd.print(CONFIRM_CONT);
+		strcpy_P(mem_cpy, (char*)pgm_read_word(&(string_table[20])));
+		lcd.print(mem_cpy);	//CONFIRM_CONT
 		while(!confirm.uniquePress()){ }
 		lcd.clear();
 		lcd.setCursor(2,1);
-		lcd.print(LOADING_R);
+		strcpy_P(mem_cpy, (char*)pgm_read_word(&(string_table[19])));
+		lcd.print(mem_cpy);	//LOADING_R
 		//Resume loading ingredients
 		myRecipe.strike_vol = 3.5;
 		myRecipe.strike_temp = 0;

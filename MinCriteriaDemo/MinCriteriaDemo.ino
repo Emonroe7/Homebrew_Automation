@@ -1,6 +1,6 @@
 /*
 = @author Eric Monroe
-= @contact 
+= @contact Emonroe7@gmail.com
 = Assitive Inebriation Device
 = 
 = This program is written for the SPSU MTRE 4400 CFV Senior Design Team.
@@ -47,7 +47,7 @@
 #include <DallasTemperature.h>
 #include <SdFat.h>
 #include <Button.h>
-#include <RTClib.h>
+//#include <RTClib.h>
 
 
 #define DEMO_RECIPE 1
@@ -65,12 +65,13 @@
 #define WATER_PUMP 22
 #define WORT_PUMP 23
 
-{//REMOVE BRACKET -STRINGS
+
 //Volume Conversion Factors
 const float galToCubicInch = 231.0;
 const float cubicInchToGal = 0.004329;
 const float qtToCubicInch = 57.75;
 const float cubicInchToQt = 0.017316;
+const float mmToInch = 0.03937;
 
 //Put these in the Flash Memory to save space in the SRAM
 const prog_char PROGMEM SPLASH1[] = "Assistive Brewing";
@@ -88,7 +89,6 @@ const prog_char PROGMEM L_MATTHEWS[] = "Lisa Matthews";
 const prog_char PROGMEM J_CANADY[] = "Joshua Canady";
 const prog_char PROGMEM E_MONROE[] = "Eric Monroe";
 const prog_char PROGMEM LOADING[] = "....Loading....";
-//const prog_char PROGMEM R_LIST_NAME[] = "rList.txt"
 const prog_char PROGMEM NUM_REC_FOUND[] = "# Recipes Found: ";
 const prog_char PROGMEM CHOOSE_RECIPE1[] = "Choose a recipe";
 const prog_char PROGMEM CHOOSE_RECIPE2[] = "from the next menu";
@@ -97,13 +97,9 @@ const prog_char PROGMEM LOADING_R[] = "Loading Recipe";
 const prog_char PROGMEM CONFIRM_CONT[] = ">Confirm to continue";
 const prog_char PROGMEM CUR_STEP[] = "Current Step:";
 const prog_char PROGMEM MASH_PH[] = "Desired Mash PH:";
-//const prog_char PROGMEM PAGE[] = "Page ";
 const prog_char PROGMEM NEXT[] = " NEXT";
-//const prog_char PROGMEM NEXT_SEL[] = ">NEXT";
 const prog_char PROGMEM PREV[] = " PREV";
-//const prog_char PROGMEM PREV_SEL[] = ">PREV";
 const prog_char PROGMEM CONFIRM[] = " CONFIRM";
-//const prog_char PROGMEM CONFIRM_SEL[] = ">CONFIRM";
 const prog_char PROGMEM YN_YES[]=">YES< NO ";          
 const prog_char PROGMEM YN_NO[]=" YES >NO<";          
 const char *yn_items[]= {YN_YES, YN_NO};		//Used to easily go between Yes and No dialog selections
@@ -142,9 +138,9 @@ PROGMEM const char *string_table[] = {
 //Extract data with: strcpy_P(mem_cpy, (char*)pgm_read_word(&(string_table[i])));
 //where i = index of desired string
 char mem_cpy[21];
-}//REMOVE
 
-{//REMOVE BRACKET -SCHEDULES AND ADR
+
+
 //Relay Schedule: 0 = OFF, 1 = ON, 2 = DON'T CARE (INTERPRET AS 0 FOR NOW)
 //Could possibly use a bit field structure, bit <vector> or just 2 bytes if we need to save space here.
 const byte HLT_FILL[] = 	{1,0,1,0,1,0,0,0,0,0,0,0};	//Previously prog_uint8_t PROGMEM, not byte
@@ -153,7 +149,7 @@ const byte STRIKE_TRANS[] = {1,0,0,1,0,1,0,0,0,0,0,0};
 const byte MASH[] = 		{1,1,0,1,1,0,1,0,1,0,0,0};
 const byte SPARGE_IN_ON[] = {1,1,0,1,0,1,1,0,0,1,0,0};
 //const byte SPARGE_IN_OFF[]= {0,1,0,0,0,0,1,0,0,1,0,0};
-//const byte REFILL_HLT[] = 	{1,0,1,0,1,0,0,0,0,0,0,0};	//For Refilling during boil at the moment
+//const byte REFILL_HLT[] = 	{1,0,1,0,1,0,0,0,0,0,0,0};	//For Refilling during boil at the moment, same as HLT_FILL
 const byte DRAIN_MLT[] =	{0,1,0,0,0,0,1,0,0,0,1,0};
 const byte BOIL[] = 		{0,0,0,0,0,0,0,0,0,0,0,0};
 const byte COOL[] = 		{1,1,0,1,1,0,0,1,1,0,0,1};
@@ -164,13 +160,9 @@ const byte chipSelect = 53;	// SD chip select pin
 const byte blinkMax = 100;
 const char LED_adr[] = {0x71, 0x72, 0x73};	//I2C addresses of LED Displays
 DeviceAddress hlt_temp, mlt_temp, bk_temp;	// Creating 1Wire address variables
-hlt_temp = {0x28, 0x61, 0x22, 0x5D, 0x04, 0x00, 0x00, 0x4A};
-mlt_temp = {0x28, 0xB4, 0x04, 0x5D, 0x04, 0x00, 0x00, 0x01};
-bk_temp = {0x28, 0x13, 0xCE, 0x5C, 0x04, 0x00, 0x00, 0xC8};
 
-}//REMOVE
 
-{//REMOVE BRACKET -GLOBAL VARS
+
 //Object creation
 SdFat sd;
 SdFile file;
@@ -184,13 +176,6 @@ Button confirm = Button(4, PULLUP);	//Confirm btn object wired to rot. enc. btn
 Button dnBtn = Button(5, PULLUP);	//Menu Nav Down btn object
 Button upBtn = Button(6, PULLUP);	//Menu Nav Up btn object
 int pulses, A_SIG=0, B_SIG=1;		//Rotary Encoder Variables
-//int millisDelay = 100;				//Delay time for btn debouncing
-//int confirmMil = 0;					//Vars to store last actuation milli time for debouncing btns
-//int upBtnMil = 0; 
-//int dnBtnMil = 0;
-//boolean confState=0, dnBtnState=0, upBtnState=0;
-//boolean confPrevState=0, dnBtnPrevState=0, upBtnPrevState=0;	
-
 
 
 //Process Enumeration. Increases readability of code. Have extras here, will clean out later
@@ -220,7 +205,7 @@ char fName[13];				//Max length of a file name is 8+1(.)+3(ext)+null = 13
 boolean at_temp = false;
 int step_sec_remain = 0;
 byte step_min_remain = 0;
-DateTime now;
+//DateTime now;
 
 
 //System Params (need to store in EEPROM later for settings menu)
@@ -233,9 +218,11 @@ int act_time = 6000;			//Time it takes for slowest valve to actuate (in ms)
 float boil_temp_set = 210.9;	//Boild temp setting because it changes based on altitude.
 int boil_power = 512;			//How vigorous should the boil be. (0-1023 or 0-100?)
 float ht_hysteresis = 0.5;		//Margin of error form filling
+float sparge_delta = 1.0;		//Change in ht allowed during sparge	
+long previousMillis = 0;
 //TODO: Store default step times and temps for manual mode in EEPROM
 
-}//REMOVE
+
 
 //Recipe Data Structure
 struct recipe{
@@ -285,7 +272,7 @@ byte Get_Num_Recipes();
 byte Load_Page(byte);
 void Get_Rec_fName(byte, byte);
 void Parse_Recipe();
-void Actuate_Relays(byte);
+void Actuate_Relays(byte[]);
 void Update_LED();
 void Read_Sensors(byte);
 //void CalcVolume(int, float);		//By each tank, or all at once?	//Working with Height, not vol.
@@ -319,12 +306,12 @@ void setup() {
 	//Called before comms to all TWI devices except lcd display.
 	Wire.begin();
 	
-	RTC.begin();	//Start comms with rtc
+	/*RTC.begin();	//Start comms with rtc
 	if (!RTC.isrunning()) {	//Ensure clock is ticking so we can keep track of time
 		Serial.println("RTC is NOT running! Setting time");
 		// following line sets the RTC to the date & time this sketch was compiled
 		RTC.adjust(DateTime(__DATE__, __TIME__)); //Need RTC for timekeeping
-	}
+	}*/
 	
     // Initialize each LED Display
     for (int i = 0; i < 3; i++){
@@ -334,9 +321,15 @@ void setup() {
         Wire.write('v');  // Clear Display, setting cursor to digit 0
         Wire.endTransmission();  // End communication with this selected module.
     }
-
+	
+	
 	//Setup the OneWire Temp sensors.
 	temp_sense.begin();
+	
+	hlt_temp = {0x28, 0x61, 0x22, 0x5D, 0x04, 0x00, 0x00, 0x4A};
+	mlt_temp = {0x28, 0xB4, 0x04, 0x5D, 0x04, 0x00, 0x00, 0x01};
+	bk_temp = {0x28, 0x13, 0xCE, 0x5C, 0x04, 0x00, 0x00, 0xC8};
+	
 	//Set Resolution (9 bit should be plenty)
 	temp_sense.setResolution(hlt_temp, TEMPERATURE_PRECISION);
 	temp_sense.setResolution(mlt_temp, TEMPERATURE_PRECISION);
@@ -367,9 +360,7 @@ void setup() {
 	
 
 	//Setup pins for pumps, solenoid valves, alarm, btns, etc. Dedicated, 1 way I/O, no comms lines
-//	pinMode(4, INPUT);		//Confirm Btn
-//	pinMode(5, INPUT);		//Nav Down Btn
-//	pinMode(6, INPUT);		//Nav Up Btn
+
 	pinMode(22, OUTPUT);	//Water pump
 	pinMode(23, OUTPUT);	//Wort pump
 	pinMode(24, OUTPUT);	//Water Supply valve
@@ -380,7 +371,7 @@ void setup() {
 	pinMode(29, OUTPUT);	//
 	pinMode(30, OUTPUT);	//
 	pinMode(31, OUTPUT);	//
-	pinMode(32, OUTPUT);	//
+	pinMode(32, OUTPUT);	//Drain
 	pinMode(33, OUTPUT);	//HLT Coil output 3 way valve.
 	pinMode(34, OUTPUT);	//Alarm
 	pinMode(53, OUTPUT);	//Chip Select on MEGA for  SD card. Must be an output.
@@ -393,10 +384,10 @@ void setup() {
 	digitalWrite(WATER_PUMP, LOW);
 	digitalWrite(WORT_PUMP, LOW);
 	
-/* 	//Check to see if SD card is present
+ 	//Check to see if SD card is present
 	if (!sd.begin(chipSelect, SPI_HALF_SPEED))
 		sd.initErrorHalt(); //TODO: Throw dialog error and ask user to insert SD card on LCD
-*/
+
 
 	delay(2000);	//Give time to read the Splash Screen.
 }
@@ -463,7 +454,7 @@ void loop()	{	//Contains Main Menu
 		if(confirm.uniquePress() == true) {	
 			//TODO: Process debounce if we encounter a bounce problem in testing.
 			//if (millis()-pressedStartTime > threshold)
-			selectionMade == true;	//Exit menu, go to selected state
+			selectionMade = true;	//Exit menu, go to selected state
 		} else if(dnBtn.uniquePress() == true) {
 			//Process debounce if problem
 			//Set cursorLoc down 1 (cursorLoc ++) and make sure within bounds.
@@ -494,72 +485,11 @@ void loop()	{	//Contains Main Menu
 	if (cursorLoc == 1){		//MODE == AUTO
 		Auto_Brew();
 	} else if (cursorLoc == 2){	//MODE == MANUAL
-		//Call Man_Brew()
+		//Call Man_Brew()	//Not yet Implemented
 	} else if (cursorLoc == 3){	//MODE == SETTINGS
 		//Call Settings_Menu()
 	}
 }
-
-
-
-/*//************** INITIALIZE TWI ****************
-void Init_LEDS(){		// Initialize all TWI devices (LCD, RTC, and LEDs)
-	lcd.begin(20, 4);		// Define LCD size
-	lcd.setBacklight(HIGH);	// Turn on the LCD backlight
-	
-	Wire.begin();  
-	RTC.begin();
-    // Initialize each LED Display
-    for (int i = 0; i < 3; i++){
-        Wire.beginTransmission(LED_adr[i]);  // Select which display to begin communication with
-        Wire.write(0x7A); // Brightness control command
-        Wire.write(100);  // Set brightness level: 0% to 100%
-        Wire.write('v');  // Clear Display, setting cursor to digit 0
-        Wire.endTransmission();  // End communication with this selected module.
-    }
-}
-
-void splash_screen(){
-	//Disp name of project, and other info.
-	lcd.clear();
-	lcd.setCursor(1,0);//x,y
-	lcd.print(SPLASH1);
-	lcd.setCursor(6,1);
-	lcd.print(SPLASH2);
-	lcd.setCursor(0,3)
-	lcd.print(SPLASH3);
-}
-
-
-//********** MENUS AND CONTROL LOOPS **********
-void Main_Menu(){
-	boolean selectionMade = false;
-	int cursor_loc = 1;
-	
-	//Display Menu
-	lcd.setCursor(0,0);
-	lcd.print(CHOOSE_MODE);
-	lcd.setCursor(1,1);
-	lcd.print(AUTO_BREW_MODE);
-	lcd.setCursor(1,2);
-	lcd.print(MANUAL_BREW_MODE);
-	lcd.setCursor(1,3);
-	lcd.print(SETTINGS_MODE);	
-	
-	lcd.setCursor(0,1);
-	lcd.print(">");
-	
-	while (!selectionMade){
-		//*
-		// * Control Cursor movement between the 3 options in response to up/down buttons.
-		// * Possibly blink "cursor" on each loop (alternate b/w printing ">" and printing " ")
-		// * Check for confirm button press (and subsequent release if down)
-		// 
-		
-	}
-	return MODE;
-}
-*/
 
 
 //     ###    ##     ## ########  #######      ########  ########  ######## ##      ## 
@@ -590,7 +520,7 @@ void Auto_Brew(){
 				delay(500);
 				num_found = Get_Num_Recipes();	//Scan SD for all recipe files
 				if(num_found < 1){	//No valid Recipes found	
-					lcd.clear();			//No recipes found error
+					lcd.clear();	//No recipes found error
 					lcd.setCursor(1,1);
 					lcd.print("No Recipes Found");
 					cout << "No Recipes found" << endl;	//Debug to PC over Arduino serial link
@@ -714,7 +644,7 @@ void Auto_Brew(){
 				/* Select and parse all recipe vars into data structure
 				 * Display all ingredients.
 				 */
-				Parse_Recipe();
+				Parse_Recipe();	//Set recipe parameters
 				STEP = ST_FILL;
 			} break;
 			
@@ -724,7 +654,7 @@ void Auto_Brew(){
 				sense = B00000001;	//Just HLT pressure
 				boolean full = false;
 				
-				des_HLT_ht = 14.5;
+				des_HLT_ht = 10.0;	//Fill up
 				
 				lcd.clear();
 				lcd.setCursor(4,1);
@@ -735,12 +665,11 @@ void Auto_Brew(){
 				delay(5000);		//Allow pump to be primed by water pressure
 				digitalWrite(WATER_PUMP, HIGH);
 				while (!full){
-					/*
-					 * Continually check HLT_pres/ht against desired ht derived from strike_vol
+					/* Continually check HLT_pres/ht against desired ht derived from strike_vol
 					 */
 					Read_Sensors(sense);
 					
-					if(HLT_ht >= (des_HLT_ht - ht_hysteresis)){
+					if(HLT_ht >= (des_HLT_ht - ht_hysteresis)){	//Move forward slightly before at desired height
 						full = true;
 					}
 				}
@@ -755,8 +684,8 @@ void Auto_Brew(){
 				Actuate_Relays(HLT_RECIRC);	//Turn on correct valves
 				
 				lcd.clear();
-				lcd.setCursor(4,1);
-				lcd.print("Mashing in");
+				lcd.setCursor(1,1);
+				lcd.print("Prepping Strike");
 				
 				digitalWrite(WATER_PUMP,HIGH);	
 				//While loop to check temps and setting heat lvl of HLT when heating is added to system
@@ -770,14 +699,15 @@ void Auto_Brew(){
 			} break;
 			
 			case ST_MASH_IN; {
-				/*
-				If strike_temp < stepin_threshold -> continue,
-				else STEP = ST_STEP_MASH_IN
-				
-				Pump out of HLT until vol(orginal_ht-now_ht) = strike_vol
-				After an initial waiting time (to allow water to reach wort pump)
-				turn on wort pump to recirc 
-				*/
+				/* If strike_temp < stepin_threshold -> continue,
+				 * else STEP = ST_STEP_MASH_IN
+				 * 
+				 * Pump out of HLT until vol(orginal_ht-now_ht) = strike_vol
+				 * After an initial waiting time (to allow water to reach wort pump)
+				 * turn on wort pump to recirc 
+				 *
+				 * TODO: ADD stepin_threshold variable (eventually make it a setting)
+				 */
 				boolean full = false;
 				//calc des_MLT_ht
 				
@@ -798,6 +728,7 @@ void Auto_Brew(){
 					
 					if(MLT_ht >= (des_MLT_ht - ht_hysteresis/2)){
 						full = true;
+						digitalWrite(WATER_PUMP,LOW);
 					}
 					
 					
@@ -806,35 +737,73 @@ void Auto_Brew(){
 				STEP = ST_MASH; //Even if no mash steps, sach step occurs in mash
 			} break;
 			
-			case ST_STEP_MASH_IN; {
-				/*
-				Transfer in interval if strike_temp above a certain amount, recirc., 
-				Turn Water side pump (22) on and of for intervals of time.
-				After trans. myRecipe.strike_vol, STEP = ST_MASH
-				*/
+			case ST_STEP_MASH_IN; {	//Used to avoid scalding grain, like tempering in baking
+				/* Transfer in interval if strike_temp above a certain amount, recirc., 
+				 * Turn Water side pump (22) on and of for intervals of time.
+				 * After trans. myRecipe.strike_vol, STEP = ST_MASH
+				 */
 				sense = B00011011;
 				Actuate_Relays(STRIKE_TRANS);
+				unsigned long currentMillis;
+				boolean pump_state = LOW;
+				
+				
+				lcd.clear();
+				lcd.setCursor(1,1);
+				lcd.print("Transfering Strike");
+				lcd.setCursor(1,2);
+				lcd.print("Stepping Mash in");
+				
+				
 				digitalWrite(WATER_PUMP, HIGH);
 				//While loop
+				while (!full) {
+					currentMillis = millis();
+					Read_Sensors(sense);
+					
+					if(MLT_ht >= (des_MLT_ht - ht_hysteresis/2)){
+						full = true;
+						digitalWrite(WATER_PUMP,LOW);
+					}
+					else if(currentMillis - previousMillis > interval) {	//Turn pump on or off in intervals
+						// save the last time you blinked the LED 
+						previousMillis = currentMillis; 
+						
+						if(pump_state == LOW)
+							pump_state = HIGH;
+						
+						else
+							pump_state = LOW;
+					}
+				}
 				
 				STEP = ST_MASH; //Even if no mash steps, sach step occurs in mash
 			} break;
 			
 			case ST_MASH: {
-				/*
-				Follow Mash Schedule
-				-Bring HLT to temp
-				
-				Continue when curr_mash_step > myRecipe.num_mash_steps;
-				-Using > b/c we want to complete each step, advance, see 
-				 there isn't corresponding step, then move on.
-				-DONT FORGET SACCH!!!! ALWAYS HAVE SACCH as last step.
-				
-				
-				If myRecipe.mash_out == 1 -> STEP = ST_MASH_OUT
-				else STEP = ST_SPARGE
-				*/
+				/* Follow Mash Schedule
+				 *-Bring HLT to temp
+				 * 
+				 * Continue when curr_mash_step > myRecipe.num_mash_steps;
+				 * -Using > b/c we want to complete each step, advance, see 
+				 *  there isn't corresponding step, then move on.
+				 * -DONT FORGET SACCH!!!! ALWAYS HAVE SACCH as last step
+				 *
+				 * If myRecipe.mash_out == 1 -> STEP = ST_MASH_OUT
+				 * else STEP = ST_SPARGE
+				 */
 				sense = B00011000;	//Only care about temps
+				
+				lcd.clear();
+				lcd.setCursor(0,0);
+				lcd.print("Mash Step");
+				
+				if (myRecipe.num_mash_steps == 0) {
+					lcd.setCursor(0,1);
+					lcd.print("No Mash additions");
+					lcd.setCursor(0,2);
+					lcd.print("Entering Sacc Step");
+				}
 				Actuate_Relays(MASH);
 				digitalWrite(WATER_PUMP,HIGH);	//Recirc HLT water to heat coil/Prevent hotspots
 				digitalWrite(WORT_PUMP,HIGH);	//Recirc through HLT coil
@@ -850,44 +819,84 @@ void Auto_Brew(){
 			} break;
 			
 			case ST_MASH_OUT: {
-				/*
-				Bring HLT and MLT up to myRecipe.mash_out_temp
-				Recirc MLT through HLT coil
-				After myRecipe.mash_out_time reached, continue to sparge.
-				*/
+				/* Bring HLT and MLT up to myRecipe.mash_out_temp
+				 * Recirc MLT through HLT coil
+				 * After myRecipe.mash_out_time reached, continue to sparge.
+				 */
 				sense = B00011000; //Only care about temps
-				while (!at_temp){
+				//Same relay setup as Mash step
+				/*while (!at_temp){	//No heating yet
 					//Wait for hlt to reach temp
 					//TODO: Implement real PID temp logic
 					//read sensors
 					if (HLT_degF >= mash_out_temp) {
 						at_temp = true;
 					}
-				}
+				}*/
+				lcd.clear();
+				lcd.setCursor(0,1);
+				lcd.print("Mashing Out");
+				
+				if(myRecipe.mash_out_time == 0.30)	//Works for demo
+					delay(30000);
 				
 				
 			} break;
 			
 			case ST_SPARGE: {
-				/*
-				Pump out slowly, pump in as needed turing pump 1 on/off as required.
-				-(or switching between 2 relay profiles(takes much longer))
-				Stop pumping when BK level reaches calculated volume with pre-boil gravity
-				*/
+				/* Pump out slowly, pump in as needed turing pump 1 on/off as required.
+				 * -(or switching between 2 relay profiles(takes much longer))
+				 * Stop pumping when BK level reaches calculated volume with pre-boil gravity
+				 *
+				 * TODO: Add HLT heat control
+				 * TODO: Add calculation of desired BK ht based on pre-boil volume
+				 * TODO: Add checks for HLT volume remaining
+				 */
 				sense = B00011111;	//Check everything except boil kettle temp
+				float MLT_ht_begin;
+				boolean full = false;
+				des_BK_ht = 8.0;
+				lcd.clear();
+				lcd.setCursor(0,1);
+				lcd.print("Sparge and Lauter");
+				
+				Read_Sensors(sense);
+				MLT_ht_begin = MLT_ht;
 				Actuate_Relays(SPARGE_IN_ON);
 				digitalWrite(WORT_PUMP, HIGH);
+				
+				while(!full) {
+					Read_Sensors(sense);
+					if(MLT_ht <= (MLT_ht_begin - sparge_delta)){
+						digitalWrite(WATER_PUMP,HIGH);
+					}
+					else if(MLT_ht >= (MLT_ht_begin + sparge_delta)){
+						digitalWrite(WATER_PUMP, LOW);
+					}
+					
+					if (BK_ht >= (des_BK_ht - ht_hysteresis)) {
+						STEP = ST_BOIL;
+						!full = true;
+						digitalWrite(WATER_PUMP,LOW);
+						digitalWrite(WORT_PUMP,LOW);
+					}
+				}
+					
 			} break; 
 			
 			case ST_BOIL: {
-				/*
-				Boil and sound alarm and update LCD following schedule.
-				Also perform drainage op on MLT while pump is unoccupied.
-				-Always prompt user to confirm befor operating drain
-				*/
+				/* Boil and sound alarm and update LCD following schedule.
+				 * Could also perform drainage op on MLT, and refilling of HLT while pump is unoccupied.
+				 * -Always prompt user to confirm befor operating drain.
+				 */
 				sense = B01100100;
 				Actuate_Relays(BOIL);
 				//Refill HLT
+				lcd.clear();
+				lcd.setCursor(0,1);
+				lcd.print("Boil Step");
+				
+				//TODO: Allow user to adjust boil power
 				delay(10000);
 				
 				
@@ -901,6 +910,13 @@ void Auto_Brew(){
 				 */
 				sense = B00000000;
 				
+				lcd.clear();
+				lcd.setCursor(0,1);
+				lcd.print("Steep Step");
+				
+				
+				if (myRecipe.steep_time = 0.10)
+					delay(10000);
 				
 				
 				STEP = ST_COOL;
@@ -913,10 +929,15 @@ void Auto_Brew(){
 				 */
 				sense = B00101000;
 				Actuate_Relays(COOL);
+				
+				lcd.clear();
+				lcd.setCursor(0,1);
+				lcd.print("Cooling");
+				
 				digitalWrite(WATER_PUMP,HIGH);
 				digitalWrite(WORT_PUMP,HIGH);
 				
-				
+				delay(30000);
 				STEP = ST_FERMFILL;
 			} break;
 			
@@ -928,13 +949,17 @@ void Auto_Brew(){
 				 * -or			-Next Step-Drain Sys	.
 				 * For now, this is final step.
 				 */
-				
+				lcd.clear();
+				lcd.setCursor(0,1);
+				lcd.print("Demo Complete");
+				Actuate_Relays(FULL_CLOSE);
+				digitalWrite(WATER_PUMP, LOW);
+				digitalWrite(WORT_PUMP, LOW);
 				
 			} break;
 			
 			case ST_DRAIN: {
-				/*
-				 * Wait till confirm to drain all tanks (implement later)
+				/* Wait till confirm to drain all tanks (implement later)
 				 */
 				
 			} break;
@@ -953,6 +978,8 @@ void Auto_Brew(){
 			} break;	
 		}
 	}
+	
+	return (1);
 }
 
 void Settings_Menu(){	//TODO: Add settings menu
@@ -1164,7 +1191,7 @@ void Parse_Recipe(){	//Preliminarily DONE
 
 
 //****** SENSORS AND ACTUATORS UPDATES ********
-void Actuate_Relays(byte){	//DONE
+void Actuate_Relays(byte[]){	//DONE
 	/* Shut off pumps first
 	 * Load the relay schedule profile into local var (maybe)
 	 * Go through 3-12 and turn on or off each in relation to schedule.
@@ -1191,20 +1218,19 @@ void Actuate_Relays(byte){	//DONE
 	delay(act_time);
 }
 
-void Update_LED(int ){ //possibly use Pointers to direct LED display vars to the correct vars.
-	/*
-		HLT Temp, MLT Temp, and Time left in step (at least initially)
-		HLT Temp, BK Temp and something else during cooling.
-		(possibly turn on little LED indicators to tell what each is displaying.
-		
-		For floats (temps), if float/100 >= 1, multiply by ten, print 4 nums to display and turn on decimal b/w digit 3 and 4
-							if float/100 < 1, multiply by ten, print nothing to digit 1, then three nums, and turn on decimal as above				
-		For times, figure out later.
-	*/
+void Update_LED(float temp, int disp_num){ //possibly use Pointers to direct LED display vars to the correct vars.
+	/* HLT Temp, MLT Temp, and Time left in step (at least initially)
+	 * HLT Temp, BK Temp and something else during cooling.
+	 * (possibly turn on little LED indicators to tell what each is displaying.
+	 * 
+	 * For floats (temps), if float/100 >= 1, multiply by ten, print 4 nums to display and turn on decimal b/w digit 3 and 4
+	 *						if float/100 < 1, multiply by ten, print nothing to digit 1, then three nums, and turn on decimal as above				
+	 * For times, figure out later.
+	 */
 	//TODO: Add LED Display Handling
 }
 
-void Read_Sensors(uint_8_t sensor_read){
+void Read_Sensors(byte sensor_read){
 	/*
 	 * Do ananlog reads on pressure sensors and read temps with oneWire
 	 * Take in byte and then check each bit for which sensors to check.
@@ -1215,15 +1241,21 @@ void Read_Sensors(uint_8_t sensor_read){
 		HLT_pres = analogRead(A0);
 		//Convert to height
 		//HLT_ht = map(0,1023,0,1000); //height in mm.  Map not ideal
+		HLT_ht = (float)HLT_pres * mmToInch;
 		//could also calc flowrates
 	}
 	if (bitRead(sensor_read,1) == 1){	//MLT Pressure
 		MLT_pres = analogRead(A1);
 		//Convert to height
-	}
-	if (bitRead(sensor_read,2) == 1){	//BK Pressure
-		BK_pres = analogRead(A1);
+		//MLT_ht = map(0,1023,0,1000); //height in mm.  Map not ideal
+		MLT_ht = (float)HLT_pres * mmToInch;
 		//Convert to height
+	}
+	if (bitRead(sensor_read,2) == 1){	//Boil Kettle Pressure
+		BK_pres = analogRead(A2);
+		//Convert to height
+		//BK_ht = map(0,1023,0,1000); //height in mm.  Map not ideal
+		BK_ht = (float)BK_pres * mmToInch;
 	}
 	if (bitRead(sensor_read,3) == 1){	//HLT Temp
 		//Read HLT Temp

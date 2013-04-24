@@ -47,7 +47,7 @@
 #include <DallasTemperature.h>
 #include <SdFat.h>
 #include <Button.h>
-//#include <RTClib.h>
+#include <RTClib.h>
 
 
 #define DEMO_RECIPE 1
@@ -143,30 +143,31 @@ char mem_cpy[21];
 
 //Relay Schedule: 0 = OFF, 1 = ON, 2 = DON'T CARE (INTERPRET AS 0 FOR NOW)
 //Could possibly use a bit field structure, bit <vector> or just 2 bytes if we need to save space here.
-const byte HLT_FILL[] = 	{1,0,1,0,1,0,0,0,0,0,0,0};	//Previously prog_uint8_t PROGMEM, not byte
-const byte HLT_RECIRC[] = 	{1,0,0,1,1,0,0,0,0,0,0,0};
-const byte STRIKE_TRANS[] = {1,0,0,1,0,1,0,0,0,0,0,0};
-const byte MASH[] = 		{1,1,0,1,1,0,1,0,1,0,0,0};
-const byte SPARGE_IN_ON[] = {1,1,0,1,0,1,1,0,0,1,0,0};
-//const byte SPARGE_IN_OFF[]= {0,1,0,0,0,0,1,0,0,1,0,0};
-//const byte REFILL_HLT[] = 	{1,0,1,0,1,0,0,0,0,0,0,0};	//For Refilling during boil at the moment, same as HLT_FILL
-const byte DRAIN_MLT[] =	{0,1,0,0,0,0,1,0,0,0,1,0};
-const byte BOIL[] = 		{0,0,0,0,0,0,0,0,0,0,0,0};
-const byte COOL[] = 		{1,1,0,1,1,0,0,1,1,0,0,1};
-const byte FILL_FERM[] =  	{0,1,0,0,0,0,0,1,0,0,1,0};
-const byte DRAIN_HLT[] =  	{1,1,0,1,0,1,0,1,0,0,1,1};
-const byte FULL_CLOSE[] =	{0,0,0,0,0,0,0,0,0,0,0,0};	//Same as BOIL, but makes code clearer
-const byte chipSelect = 53;	// SD chip select pin
-const byte blinkMax = 100;
+byte HLT_FILL[] = 	{1,0,1,0,1,0,0,0,0,0,0,0};	//Previously prog_uint8_t PROGMEM, not byte
+byte HLT_RECIRC[] = 	{1,0,0,1,1,0,0,0,0,0,0,0};
+byte STRIKE_TRANS[] = {1,0,0,1,0,1,0,0,0,0,0,0};
+byte MASH[] = 		{1,1,0,1,1,0,1,0,1,0,0,0};
+byte SPARGE_IN_ON[] = {1,1,0,1,0,1,1,0,0,1,0,0};
+//byte SPARGE_IN_OFF[]= {0,1,0,0,0,0,1,0,0,1,0,0};
+//byte REFILL_HLT[] = 	{1,0,1,0,1,0,0,0,0,0,0,0};	//For Refilling during boil at the moment, same as HLT_FILL
+byte DRAIN_MLT[] =	{0,1,0,0,0,0,1,0,0,0,1,0};
+byte BOIL[] = 		{0,0,0,0,0,0,0,0,0,0,0,0};
+byte COOL[] = 		{1,1,0,1,1,0,0,1,1,0,0,1};
+byte FILL_FERM[] =  	{0,1,0,0,0,0,0,1,0,0,1,0};
+byte DRAIN_HLT[] =  	{1,1,0,1,0,1,0,1,0,0,1,1};
+byte FULL_CLOSE[] =	{0,0,0,0,0,0,0,0,0,0,0,0};	//Same as BOIL, but makes code clearer
+byte chipSelect = 53;	// SD chip select pin
+byte blinkMax = 100;
 const char LED_adr[] = {0x71, 0x72, 0x73};	//I2C addresses of LED Displays
-DeviceAddress hlt_temp, mlt_temp, bk_temp;	// Creating 1Wire address variables
-
+//DeviceAddress hlt_temp, mlt_temp, bk_temp;	// Creating 1Wire address variables
+DeviceAddress hlt_temp = {0x28, 0x61, 0x22, 0x5D, 0x04, 0x00, 0x00, 0x4A};
+DeviceAddress mlt_temp = {0x28, 0xB4, 0x04, 0x5D, 0x04, 0x00, 0x00, 0x01};
+DeviceAddress bk_temp = {0x28, 0x13, 0xCE, 0x5C, 0x04, 0x00, 0x00, 0xC8};
 
 
 //Object creation
 SdFat sd;
 SdFile file;
-FatReader root;
 ArduinoOutStream cout(Serial);		//Create a serial output stream for SDFat. Can use cout instead of Serial.write();
 RTC_DS1307 RTC;						//Real time clock object
 OneWire  ds(10);  					//OneWire devices connected to pin #10 (to change pin, change number)
@@ -179,9 +180,13 @@ int pulses, A_SIG=0, B_SIG=1;		//Rotary Encoder Variables
 
 
 //Process Enumeration. Increases readability of code. Have extras here, will clean out later
-enum STEP {ST_MENU, ST_READY, ST_FILL, ST_STRIKE, ST_MASH_IN, ST_STEP_MASH_IN, ST_MASH, ST_MASH_OUT, ST_SPARGE, 
-		   ST_BOIL, ST_COOL, ST_FILLFERM, ST_DONE, ST_DRAIN, ST_DRAIN_MLT, ST_DRAIN_HLT, ST_CIP, ST_ERROR};
-enum MODE {AUTO = 1, MANUAL, SETTINGS};
+enum STEPS {ST_MENU, ST_READY, ST_FILL, ST_STRIKE, ST_MASH_IN, ST_STEP_MASH_IN, ST_MASH, ST_MASH_OUT, ST_SPARGE, 
+		   ST_BOIL, ST_STEEP, ST_COOL, ST_FILLFERM, ST_DONE, ST_DRAIN, ST_DRAIN_MLT, ST_DRAIN_HLT, ST_CIP, ST_ERROR};
+enum MODES {AUTO = 1, MANUAL, SETTINGS};
+
+enum STEPS STEP;
+enum MODES MODE;
+
 
 //Program Global Variables
 boolean SD_Present = false;
@@ -205,6 +210,7 @@ char fName[13];				//Max length of a file name is 8+1(.)+3(ext)+null = 13
 boolean at_temp = false;
 int step_sec_remain = 0;
 byte step_min_remain = 0;
+int step_interval = 5000;
 //DateTime now;
 
 
@@ -257,7 +263,6 @@ struct recipe{
 	int steep_time;
 	float cooling_temp;
 } myRecipe;		//Creating recipe struct myRecipe here b/c we will only have 1 recipe at a time.
-
 
 //=======================================================
 //================= Function Prototypes =================
@@ -325,10 +330,6 @@ void setup() {
 	
 	//Setup the OneWire Temp sensors.
 	temp_sense.begin();
-	
-	hlt_temp = {0x28, 0x61, 0x22, 0x5D, 0x04, 0x00, 0x00, 0x4A};
-	mlt_temp = {0x28, 0xB4, 0x04, 0x5D, 0x04, 0x00, 0x00, 0x01};
-	bk_temp = {0x28, 0x13, 0xCE, 0x5C, 0x04, 0x00, 0x00, 0xC8};
 	
 	//Set Resolution (9 bit should be plenty)
 	temp_sense.setResolution(hlt_temp, TEMPERATURE_PRECISION);
@@ -499,7 +500,7 @@ void loop()	{	//Contains Main Menu
 //  ######### ##     ##    ##    ##     ##     ##     ## ##   ##   ##       ##  ##  ## 
 //  ##     ## ##     ##    ##    ##     ##     ##     ## ##    ##  ##       ##  ##  ## 
 //  ##     ##  #######     ##     #######      ########  ##     ## ########  ###  ###  
-void Auto_Brew(){
+int Auto_Brew(){
 	step_done = false;
 	byte sense = B00000000;
 	STEP = ST_MENU;
@@ -677,7 +678,7 @@ void Auto_Brew(){
 				STEP = ST_STRIKE;
 			} break;
 			
-			case ST_STRIKE; {
+			case ST_STRIKE: {
 				/* Heat up HLT to myRecipe.strike_temp, add water additives
 				 */
 				sense = B00001001;	//HLT Pressure and temp
@@ -698,7 +699,7 @@ void Auto_Brew(){
 				}
 			} break;
 			
-			case ST_MASH_IN; {
+			case ST_MASH_IN: {
 				/* If strike_temp < stepin_threshold -> continue,
 				 * else STEP = ST_STEP_MASH_IN
 				 * 
@@ -737,7 +738,7 @@ void Auto_Brew(){
 				STEP = ST_MASH; //Even if no mash steps, sach step occurs in mash
 			} break;
 			
-			case ST_STEP_MASH_IN; {	//Used to avoid scalding grain, like tempering in baking
+			case ST_STEP_MASH_IN: {	//Used to avoid scalding grain, like tempering in baking
 				/* Transfer in interval if strike_temp above a certain amount, recirc., 
 				 * Turn Water side pump (22) on and of for intervals of time.
 				 * After trans. myRecipe.strike_vol, STEP = ST_MASH
@@ -746,7 +747,7 @@ void Auto_Brew(){
 				Actuate_Relays(STRIKE_TRANS);
 				unsigned long currentMillis;
 				boolean pump_state = LOW;
-				
+				boolean full = false;
 				
 				lcd.clear();
 				lcd.setCursor(1,1);
@@ -765,7 +766,7 @@ void Auto_Brew(){
 						full = true;
 						digitalWrite(WATER_PUMP,LOW);
 					}
-					else if(currentMillis - previousMillis > interval) {	//Turn pump on or off in intervals
+					else if(currentMillis - previousMillis > step_interval) {	//Turn pump on or off in intervals
 						// save the last time you blinked the LED 
 						previousMillis = currentMillis; 
 						
@@ -876,7 +877,7 @@ void Auto_Brew(){
 					
 					if (BK_ht >= (des_BK_ht - ht_hysteresis)) {
 						STEP = ST_BOIL;
-						!full = true;
+						full = true;
 						digitalWrite(WATER_PUMP,LOW);
 						digitalWrite(WORT_PUMP,LOW);
 					}
@@ -938,10 +939,10 @@ void Auto_Brew(){
 				digitalWrite(WORT_PUMP,HIGH);
 				
 				delay(30000);
-				STEP = ST_FERMFILL;
+				STEP = ST_FILLFERM;
 			} break;
 			
-			case ST_FERMFILL: {
+			case ST_FILLFERM: {
 				/*
 				 * Don't drain until confirm (possibly flush first from HLT->Cleaned MLT)
 				 * Pause upon another confirm after a minimum time passed (5sec or so).
@@ -974,7 +975,7 @@ void Auto_Brew(){
 				lcd.setCursor(2,2);
 				lcd.print("Shuttting Down");
 				Actuate_Relays(FULL_CLOSE);
-				while(1)//Halt, error
+				while(1){}//Halt, error
 			} break;	
 		}
 	}
@@ -1015,7 +1016,7 @@ byte Load_Page(byte page){
 	byte good_entries = 0;
 	bool none_left = false;
 	const int buf_size = 20;
-	char rec_name_buf[rec_name_buf_size];
+	char rec_name_buf[buf_size];
 	
 	//rollover protection here
 	if (page > tot_page_num){
@@ -1027,7 +1028,7 @@ byte Load_Page(byte page){
 	
 	//Get to desired directory location
 	if((page < curr_page_num) || (page == 0)) {
-		root.rewind();
+		file.rewind();
 		for(int i = 0; i < (page*3);) {	//If page 1 (so 2nd real page) go through 3 valid files that won't be displayed.
 			file.openNext(sd.vwd(), O_READ);
 			cout << 'Skip file: ';
@@ -1046,7 +1047,9 @@ byte Load_Page(byte page){
 	while(good_entries < 3 || !none_left){
 		if(file.openNext(sd.vwd(), O_READ)){
 			if(file.isFile()){
-				if(file.getline(rec_name_buf, buf_size, '\n') || file.gcount()){
+				file.getFilename(fName);
+				ifstream sdin(fName);
+				if(sdin.getline(rec_name_buf, buf_size, '\n') || sdin.gcount()){
 					if (sdin.fail())
 					{	sdin.clear(sdin.rdstate() & ~ios_base::failbit);}
 					//If a file can be opened, is valid, and has a line to read, then print 19 chars of first line to correct line
@@ -1086,7 +1089,7 @@ byte Load_Page(byte page){
 void Get_Rec_fName(byte page, byte entry_num){
 	byte dir_index = (page * 3) + entry_num;
 	
-	root.rewind();
+	file.rewind();
 	cout << "Getting selected file name." << endl; 
 	for(int i = 0; i < dir_index;) {	//Will open all files until the the target file is opened and validated
 		file.openNext(sd.vwd(), O_READ);
@@ -1105,7 +1108,7 @@ void Get_Rec_fName(byte page, byte entry_num){
 	file.getFilename(fName);
 	file.close();
 	
-	return();
+	return;
 }
 
 void Parse_Recipe(){	//Preliminarily DONE
@@ -1191,7 +1194,7 @@ void Parse_Recipe(){	//Preliminarily DONE
 
 
 //****** SENSORS AND ACTUATORS UPDATES ********
-void Actuate_Relays(byte[]){	//DONE
+void Actuate_Relays(byte schedule[]){	//DONE
 	/* Shut off pumps first
 	 * Load the relay schedule profile into local var (maybe)
 	 * Go through 3-12 and turn on or off each in relation to schedule.
@@ -1206,12 +1209,12 @@ void Actuate_Relays(byte[]){	//DONE
 	digitalWrite(24, schedule[2]);
 	digitalWrite(25, schedule[3]);
 	digitalWrite(26, schedule[4]);
-	digitalWrite(27, schedule[5]);
-	digitalWrite(28, schedule[6]);
-	digitalWrite(29, schedule[7]);
-	digitalWrite(30, schedule[8]);
-	digitalWrite(31, schedule[9]);
-	digitalWrite(32, schedule[10]);
+	//digitalWrite(27, schedule[5]);
+	digitalWrite(28, schedule[5]);
+	digitalWrite(29, schedule[6]);
+	digitalWrite(30, schedule[7]);
+	digitalWrite(31, schedule[8]);
+	digitalWrite(32, schedule[9]);
 	digitalWrite(33, schedule[11]);
 	
 	//Allow time for valves to completely actuate
